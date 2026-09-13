@@ -94,7 +94,7 @@
   @keyframes scanDrift{to{background-position:0 40px}}
   @keyframes staticShift{0%{background-position:0 0,0 0}25%{background-position:-3px 1px,2px -1px}50%{background-position:1px -2px,-1px 3px}75%{background-position:-2px 3px,3px 1px}100%{background-position:0 0,0 0}}
   @keyframes pop{from{transform:scale(.93);opacity:0}}
-  #menu{overflow:hidden}
+  #menu{overflow:hidden;background:transparent;}
   #menu::before,#menu::after{display:none;}
   @keyframes breathe{0%,100%{opacity:.22}50%{opacity:.42}}
   h1{margin:0;font-size:36px;letter-spacing:9px;font-weight:800;
@@ -124,9 +124,6 @@
   .tkCell.selP1{border-color:#ff5d5d;box-shadow:0 0 0 2px #ff5d5d inset,0 0 14px rgba(255,93,93,.55);}
   .tkCell.selP2{border-color:#4d9fff;box-shadow:0 0 0 2px #4d9fff inset,0 0 14px rgba(77,159,255,.55);}
   .tkCell.selP1.selP2{border-color:#c084fc;box-shadow:0 0 0 2px #c084fc inset,0 0 16px rgba(192,132,252,.6);}
-  .tkCell.random{border-color:rgba(125,93,255,.5);background:radial-gradient(circle at 35% 28%,rgba(125,93,255,.18),rgba(0,0,0,.42));}
-  .tkCell.random:hover{border-color:#a884ff;box-shadow:0 0 16px rgba(125,93,255,.5);}
-  .tkCell.random .tag{color:#a884ff;}
   .tkCell .tag{position:absolute;left:2px;right:2px;bottom:2px;font-size:7.5px;font-weight:700;
     letter-spacing:.4px;color:#dbe5f3;text-shadow:0 1px 2px #000,0 0 4px #000;}
   .tkTurn{font-size:13px;font-weight:800;letter-spacing:3px;animation:vspulse 1.7s infinite;}
@@ -550,11 +547,16 @@ const WEAPONS={
   staff:   {name:'Mage',    mul:1.8, dmg:1, spd:6.0, knock:210},
   zombie:  {name:'Zombie',  mul:.5,  dmg:0, spd:1.2, knock:220,noHit:true},
   throwStar:{name:'Ninja',  mul:1.2, dmg:1, spd:10,  knock:280},
-  vlad:    {name:'Vlad', mul:1.8, dmg:2, spd:7.0, knock:210}
+  vlad:    {name:'Vlad', mul:1.8, dmg:2, spd:7.0, knock:210},
+  quicksilver:{name:'Quicksilver', mul:0, dmg:1, spd:8.0, knock:220},
+  gravity: {name:'Gravitor',mul:.55,dmg:1.5,spd:4.0,knock:160}
 };
+const GW={satellites:3,orbit:1.55,orbitMax:5.2,orbitPeriod:7,orbitHold:1,orbSpinGain:.2,satelliteRadius:.20,maxCharge:6,chargeCapacityGain:1,
+  cooldownMin:10,cooldownMax:14,duration:2.5,fieldRadius:4.2,pull:1500,burst:8,chargeDamage:2,
+  chargePull:.15,chargeRadius:.08,openDuration:.3,feedStagger:.55,feedFlight:.65,feedGrowth:.18};
 const KEYS=Object.keys(WEAPONS);
-const WEAPON_NAMES={sword:'Sword',dagger:'Dagger',spear:'Staff',hammer:'Hammer',scythe:'Scythe',shield:'Tanto',shuriken:'Dice',bow:'Bow',katana:'Katana',staff:'Staff',zombie:'Claws',throwStar:'Shuriken',vlad:'Spear'};
-const WEAPON_NAMES_IT={sword:'Spada',dagger:'Pugnale',spear:'Bastone',hammer:'Martello',scythe:'Falcetto',shield:'Tanto',shuriken:'Dadi',bow:'Arco',katana:'Katana',staff:'Bastone',zombie:'Artigli',throwStar:'Shuriken',vlad:'Lancia'};
+const WEAPON_NAMES={sword:'Sword',dagger:'Dagger',spear:'Staff',hammer:'Hammer',scythe:'Scythe',shield:'Tanto',shuriken:'Dice',bow:'Bow',katana:'Katana',staff:'Staff',zombie:'Claws',throwStar:'Shuriken',vlad:'Spear',quicksilver:'Goggles',gravity:'Orbital Satellites'};
+const WEAPON_NAMES_IT={sword:'Spada',dagger:'Pugnale',spear:'Bastone',hammer:'Martello',scythe:'Falcetto',shield:'Tanto',shuriken:'Dadi',bow:'Arco',katana:'Katana',staff:'Bastone',zombie:'Artigli',throwStar:'Shuriken',vlad:'Lancia',quicksilver:'Occhiali',gravity:'Satelliti Orbitali'};
 function mainSkillName(k){
   const dt=(lang==='it'?DETAILS_IT:DETAILS)[k];
   if(!dt||!dt.act||!dt.act[0])return'';
@@ -590,11 +592,17 @@ function ptSeg(px,py,x1,y1,x2,y2){
   let t=((px-x1)*dx+(py-y1)*dy)/l2;t=Math.max(0,Math.min(1,t));
   return Math.hypot(px-(x1+t*dx),py-(y1+t*dy));
 }
+function reapOverlaps(p,b,R){
+  const ang=Math.atan2(p.vy,p.vx);
+  const x1=p.x-Math.cos(ang)*2.8*R,y1=p.y-Math.sin(ang)*2.8*R;
+  return ptSeg(b.x,b.y,x1,y1,p.x,p.y)<Math.max(b.r,R*1.5);
+}
 const fmtD=n=>{const v=Math.round(n*10)/10;return v%1?v.toFixed(1):String(v);};
 const PALETTE=['#ff5d5d','#ffb84d','#ffe14d','#7dff5d','#4dffc3','#4dc3ff','#7d5dff','#ff5dd4','#f2f5f8','#9fb3c8'];
 const DIE_PIPS=[[-.52,-.52],[0,-.52],[.52,-.52],[-.52,0],[0,0],[.52,0],[-.52,.52],[0,.52],[.52,.52]];
 const DIE_FACES=[[4],[0,8],[0,4,8],[0,2,6,8],[0,2,4,6,8],[0,2,3,5,6,8]];
 const SKILLS={
+  gravity:'Starts with three orbs dealing 1.5 damage per hit; they cannot clash. Each extra orb adds 20% of base rotation speed. Their orbit expands from 1.55x to 5.2x the ball radius over 3s, holds at maximum for 1s, then contracts over 3s. Each damaging orb hit adds 1 Orb charge and 1 extra orb, capped at the current capacity (initially 6 extra, 9 total). SINGULARITY: every 10-14s, opens a black hole at the nearest vulnerable enemy with full pull strength immediately: +15% of base pull per consumed charge. Charges reset and extra orbs fly into it, leaving 3 orbiting orbs. Absorption grows the radius by 8% of base per orb. After absorption it pulls for 2.5s, then bursts for 8 damage +2 per consumed charge. Each cast raises maximum Orb charges by 1 for this battle. New charges during the well power the next cast. Escape the marked area before the burst.',
   sword:'2 base dmgIncremental: arc hits add permanent ATKARC SWING: every 2-5s, lock-on sweep, 2x dmg+4 ATK per arc hit',
   dagger:'1 base dmg (fixed)SPINS: dagger circles him nonstop - every half-spin is a hitIncremental: hits add spin speed (+10% each), backstabs add +15%VANISH: every 3-5s, ghost for 3s (untouchable), slowly stalks enemiesBACKSTAB: touching him while ghosted = he teleports behind you and stabs for 25% of current HP (min 10)',
   spear:'1 base dmg (fixed)Incremental: +10% staff length and +0.1 dmg per hit (original only)CLONE: every 5-10s, summons a clone wielding his current staff - inherits his length and dmg at spawn, fixed forever (15 HP)UNBLOCKABLE: once the staff passes 5x length it ignores weapon clashes',
@@ -606,8 +614,9 @@ const SKILLS={
   katana:'1 base dmgIncremental: dash hits stack slash dmg (first = 1, +1 each)IAI DASH: every 2-4s, lock-on flash strikeFRESH BLADE: a successful dash hit cuts his next dash cooldown by 1s',
   staff:'1 contact dmg · lock-on: tracks the enemy, then fires an elemental orb every 2s (0.5 base dmg)Fire (red) · Ice (blue) · Lightning (purple)Status chance: 3% base, +3% per hitFire: 1.5 dmg/s burn for 6s · Ice: 3s freeze (no attack/defend) · Lightning: electrocuted - next hit taken is 3×Incremental: +0.5 orb dmg, bigger orb & explosion per hitELEMENT SHIFT: every 6-12s, shifts to his NEXT element and instantly blasts a large AOE burst of that new element - the burst always applies its status (100%)',
   zombie:'Base damage: 5 dmgPassive: When a target enters his bite circle, he instantly bites them, then retreats and waits 2s before biting again.Each successful bite reduces Zombie Horde cooldown by 1s. Heals 5 HP for every successful bite. 20% chance per bite to afflict INFECTED.MINI ZOMBIE HORDE: every 20-30s calls 10 mini zombies (8 HP) from outside the arena - +1 per landed bite. Each one instantly bites the enemy for 2 dmg/s for 3s then dies. Max 5 latched at once; latched zombies cannot be damaged.INFECTED: target movement and rotation speed halved for 5s.',
-  throwStar:'1 base dmg per shurikenPassive: Shuriken bounce off walls. Default max 1 bounce. Each hit increases max bounces by +1.SHURIKEN NO JUTSU: every 5-10s, fires 10 shuriken in a radial burst, then vanishes for 3s and reappears randomly. Each activation increases max bounces by +1.',
-  vlad:'2 base dmg (fixed)Bleed: each hit adds +1-20% bleed buildup to the target (decays -1%/s); at 100% the target immediately takes 20 dmg and the buildup resetsIMPALE: every 5-10s, stops, locks on and charges the spear for 1s then throws it. The spear pierces straight through the enemy and slams its tip into the wall, pinning them there for 2 dmg (they can\u2019t move or act, take 1 dmg/0.5s and gain +1% bleed buildup/s); the spear stays stuck until Vlad walks up and pulls it out to free them.'
+  throwStar:'1 base dmg per shurikenPassive: Shuriken bounce off walls. Default max 1 bounce. Each hit increases max bounces by +1.BOUNCING BLADE: each wall bounce adds +0.2 dmg to that shurikenSHURIKEN NO JUTSU: every 5-10s, fires 10 shuriken in a radial burst, then vanishes for 3s and reappears randomly. Each activation increases max bounces by +1.',
+  vlad:'2 base dmg (fixed)Bleed: each hit adds +1-20% bleed buildup to the target (decays -1%/s); at 100% the target immediately takes 20 dmg and the buildup resetsIMPALE: every 5-10s, stops, locks on and charges the spear for 1s then throws it. The spear pierces straight through the enemy and slams its tip into the wall, pinning them there for 2 dmg (they can\u2019t move or act, take 1 dmg/0.5s and gain +1% bleed buildup/s); the spear stays stuck until Vlad walks up and pulls it out to free them.',
+  quicksilver:'Stacks: +1 per hit dealt or taken, each stack = +0.50 speed (no cap)His touch damage is 50% of his current speed (1 + 0.5 per stack, so 8x speed = 4 dmg).No speed limit, no weapon, no weapon clashes. His speed never decays and he can\u2019t be slowed down.SUPERSPEED: every 12-20s, for 3s he moves at DOUBLE his current speed (>1000 min) while time drops to 0.1% - everything except him crawls to a halt (enemy movement, attacks and main-skill cooldowns included, so they can\u2019t hit anything), he phases straight through enemies and their weapons while still landing touch hits as he passes.'
 };
 
 let state='menu',paused=false,demoMode=false,demoRespawn=1.2;
@@ -688,6 +697,11 @@ else if(k==='clone'){const v=sfxVol;[880,1174,1567].forEach((f,i)=>setTimeout(()
     else if(k==='bite'){nz(.06,.2,3000,700,'bandpass',1.6);sub(150,60,.16,.18);ping(950,.1,.03);}
     else if(k==='pop'){tone(420,.09,'sine',.05,-260);nz(.05,.06,1800,600);}
 else if(k==='horde'){const v=sfxVol;[110,98,87].forEach((f,i)=>setTimeout(()=>{tone(f,.6,'sawtooth',.05*v,-14);},i*130));nz(.9,.07,220,90,'lowpass');}
+    else if(k==='qsBoost'){tone(700,.12,'triangle',.06,220);tone(1060,.16,'triangle',.055,300);nz(.1,.04,2400,4200,'bandpass',2);}
+    else if(k==='qsGo'){sub(130,950,.6,.15);nz(.55,.08,900,6800,'bandpass',2.2);tone(500,.4,'sawtooth',.045,2600);}
+    else if(k==='qsEnd'){tone(2200,.22,'sine',.06,-1700);nz(.2,.06,4200,600,'bandpass',1.6);}
+    else if(k==='gravityCast'){sub(180,38,.8,.16);tone(440,.65,'sine',.05,-330);nz(.6,.055,1100,90,'lowpass');}
+    else if(k==='gravityBurst'){sub(70,280,.22,.18);ping(330,.6,.04);nz(.25,.12,160,1800,'bandpass',1.2);}
   }catch(e){}
   curBus=oldBus;
 }
@@ -769,16 +783,16 @@ function musTick(){
   }
 }
 const MENU_SONGS=[
-  {src:'menu-music.mp3',name:'Underclocked (Eric Skiff)'},
-  {src:'night-of-dizzy-spells.mp3',name:'A Night of Dizzy Spells (Eric Skiff)'},
-  {src:'powerup.mp3',name:'Powerup! (Jeremy Blake)'},
-  {src:'chopsticks.mp3',name:'Chopsticks (Jorge Hernandez)'},
-  {src:'mountain-trials.mp3',name:'Mountain Trials (Joshua McLean)'},
-  {src:'digestive-biscuit.mp3',name:'Digestive Biscuit (Kubbi)'},
-  {src:'boss-time.mp3',name:'Boss Time'},
-  {src:'dungeon-boss.mp3',name:'8bit Dungeon Boss (Kevin MacLeod)'}
+  {src:'music/menu-music.mp3',name:'Underclocked (Eric Skiff)'},
+  {src:'music/night-of-dizzy-spells.mp3',name:'A Night of Dizzy Spells (Eric Skiff)'},
+  {src:'music/powerup.mp3',name:'Powerup! (Jeremy Blake)'},
+  {src:'music/chopsticks.mp3',name:'Chopsticks (Jorge Hernandez)'},
+  {src:'music/mountain-trials.mp3',name:'Mountain Trials (Joshua McLean)'},
+  {src:'music/digestive-biscuit.mp3',name:'Digestive Biscuit (Kubbi)'},
+  {src:'music/boss-time.mp3',name:'Boss Time'},
+  {src:'music/dungeon-boss.mp3',name:'8bit Dungeon Boss (Kevin MacLeod)'}
 ];
-let musIdx=0,musLoaded=false,menuMusicFail=false,musFailStreak=0,musLoop=false,musShuf=false,bossFail=false;
+let musIdx=Math.floor(Math.random()*MENU_SONGS.length),musLoaded=false,menuMusicFail=false,musFailStreak=0,musLoop=false,musShuf=false,bossFail=false;
 const menuMusicEl=()=>document.getElementById('menuMusic');
 const fightMusicEl=()=>document.getElementById('fightMusic');
 function songName(s){return s?(s.name||String(s.src).replace(/\.mp3$/i,'').replace(/_+/g,' ').trim()):'?';}
@@ -834,7 +848,7 @@ function setMusic(name){
     musCtx='game';
     if(!fm||bossFail){musProcedural('game');return;}
     if(mm)mm.pause();
-    fm.src='boss-time.mp3';fm.loop=false;
+    fm.src='music/boss-time.mp3';fm.loop=false;
     refreshMusic();
     fm.play().then(()=>{}).catch(()=>{bossFail=true;musProcedural('game');});
     return;
@@ -908,7 +922,7 @@ class Ball{
     this.stacks=0;this.dmgBonus=0;this.spdMul=1;this.lenMul=1;this.knockMul=1;
     if(this.w==='sword'){this.swingT=rand(2,5);this.swingState=0;this.swingAim=0;this.swingHit=false;this.prevSw=0;this.startSw=0;}
     if(this.w==='dagger'){this.vanishT=rand(3,5);this.vanishState=0;this.vanishLeft=0;}
-    this.cdMul=1;this.orbSize=1;this.cap=this.w==='hammer'?1400:1800;this.rotDir=Math.random()<.5?-1:1;this.rotJit=1;
+    this.cdMul=1;this.orbSize=1;this.cap=this.w==='hammer'?1400:this.w==='quicksilver'?2400:1800;this.rotDir=Math.random()<.5?-1:1;this.rotJit=1;
     this.knockMul=1;this.wallMark=0;this.giantUntil=0;
     if(this.w==='hammer'){this.giantT=rand(10,15);this.giantState=0;this.giantLeft=0;this.knockSave=1;}
     this.bounces=2;this.dashT=rand(2.5,5);this.dashState=0;this.dashDir=0;this.dashAim=0;
@@ -921,6 +935,13 @@ class Ball{
     if(this.w==='zombie'){this.zState=0;this.zCd=0;this.biteLeft=0;this.biteDid=false;this.retreatLeft=0;this.hordeT=rand(20,30);this.hordeMax=30;this.zMini=false;this.zLatch=false;this.zHost=null;this.zOff=0;this.zBiteT=0;this.zTicks=0;this.zEnter=false;this.zWp=null;this.zIFrames=0;this.zExtra=0;}
     if(this.w==='throwStar'){this.throwT=1;this.njMaxBounce=1;this.njSkillT=rand(5,10);this.njHideLeft=0;this.njHidden=false;this.njStacks=0;}
     if(this.w==='vlad'){this.vImpT=rand(5,10);this.vImpState=0;this.vImpCharge=0;this.vImpTip=null;this.vImpDir=null;this.vImpCarry=null;}
+    if(this.w==='quicksilver'){this.qsSkillT=rand(12,20);this.qsActive=false;this.qsLeft=0;this.qsBoost=1;this.qsSpd=0;this.qsDir=rand(0,Math.PI*2);this.qsDirT=0;this.qsHitCdT=0;this._hpPrev=this.hp;this.qsTrail=[];}
+    if(this.w==='gravity'){
+      this.gwOrbitTime=0;this.gwMaxCharge=GW.maxCharge;
+      this.gwCooldown=rand(GW.cooldownMin,GW.cooldownMax);this.gwCooldownMax=this.gwCooldown;
+      this.gwLeft=0;this.gwCharge=0;this.gwPower=0;this.gwX=x;this.gwY=y;this.gwRadius=this.r*GW.fieldRadius;
+      this.gwAge=0;this.gwCastDuration=0;this.gwFeed=[];this.gwAbsorbed=0;this.gwStrength=0;this.gwPull=GW.pull;this.gwPulse=0;
+    }
     this.burn=null;this.infectedUntil=0;this.bleed=0;this.impOwner=null;this.pinX=this.x;this.pinY=this.y;
   }
   wsc(){return this.w==='hammer'&&this.giantUntil>simTime?2:1;}
@@ -1061,7 +1082,7 @@ class Ball{
     const iceFreeze=this.mageIceUntil>simTime;
     const frozen=iceFreeze||this.w==='katana'&&this.dashState>0||this.w==='sword'&&this.swingState>0||this.w==='scythe'&&this.reapState===1||this.w==='shield'&&this.prepLeft>0||this.w==='vlad'&&this.vImpState>0;
     const bowLock=this.w==='bow'&&this.chargeState===0&&this.pt<.55;
-    const inf=this.infectedUntil>simTime?.5:1;
+    const inf=(this.w==='quicksilver'||this.infectedUntil<=simTime)?1:.5;
     if(this.impOwner){
       // Keep verifying the impale record still exists
       const stillImpaled=impales.some(im=>im.victimId===this.id);
@@ -1069,8 +1090,12 @@ class Ball{
       else this.impOwner=null; // stale reference, clear it
     }
     if(iceFreeze){this.vx*=Math.exp(-5*dt);this.vy*=Math.exp(-5*dt);}
-    if(!frozen&&!bowLock&&!(this.w==='staff'&&this.mageOrbT<.5&&this.mageOrbT>0))this.ang+=this.def.spd*this.spdMul*this.rotDir*this.rotJit*dt*inf;
+    const orbitSpeed=this.w==='gravity'?1+gravityOrbCharges(this)*GW.orbSpinGain:1;
+    const spinStep=this.def.spd*this.spdMul*this.rotDir*this.rotJit*dt*inf*orbitSpeed;
+    if(this.w==='gravity')this.gwSpin=(frozen||bowLock)?0:spinStep;
+    if(!frozen&&!bowLock&&!(this.w==='staff'&&this.mageOrbT<.5&&this.mageOrbT>0))this.ang+=spinStep;
     if(iceFreeze)return;
+    if(this.w==='gravity')updateGravityWarden(this,dt);
     if(this.w==='katana'){
       if(this.dashState===0){
         this.dashT-=dt;
@@ -1115,6 +1140,56 @@ class Ball{
       }
       if(this.vanishLeft<=0)this.endVanish();
       return;
+    }
+    if(this.w==='quicksilver'){
+      this.qsTrail.push({x:this.x,y:this.y});
+      if(this.qsTrail.length>14)this.qsTrail.shift();
+      if(this._hpPrev!==undefined&&this.hp<this._hpPrev&&!this.qsActive){
+        this.qsBoost+=.5;
+        addFloater(this.x,this.y-this.r-40,'\u26A1 BOOST \u00d7'+this.qsBoost.toFixed(1),'#4de1ff');
+        spawnSparks(this.x,this.y,'#4de1ff',5,200);
+        sfx('qsBoost');
+      }
+      this._hpPrev=this.hp;
+      if(!this.qsActive){
+        this.qsSkillT-=dt;
+        if(this.qsSkillT<=0){
+          this.qsSkillT=9999;
+          this.qsActive=true;this.qsLeft=3;this.ghost=true;
+          this.qsHitCdT=0;
+          this.qsActDir=Math.atan2(this.vy,this.vx);
+          this.qsSpd=Math.max(1000,Math.hypot(this.vx,this.vy)*2);
+          this.qsDir=this.qsActDir;
+          this.qsDirT=0;
+          targetTS=.001;timeScale=Math.min(timeScale,.25);
+          spawnSparks(this.x,this.y,'#4de1ff',24,460);
+          addRing(this.x,this.y,'#4de1ff',this.r*1.9);
+          addFloater(this.x,this.y-this.r-42,'SUPERSPEED!','#4de1ff');
+          shake+=9;sfx('charge');sfx('qsGo');
+        }
+      }
+      if(this.qsActive){
+        const fdt=dt/Math.max(timeScale,.0001);
+        this.qsLeft-=fdt;this.qsDirT-=fdt;this.qsHitCdT=Math.max(0,this.qsHitCdT-fdt);
+        if(this.qsDirT<=0){this.qsDir=rand(0,Math.PI*2);this.qsDirT=rand(.4,.8);}
+        const qsp=this.qsSpd||Math.max(1600,this.cap*1.3);
+        this.vx=Math.cos(this.qsDir)*qsp;this.vy=Math.sin(this.qsDir)*qsp;
+        this.x+=this.vx*fdt;this.y+=this.vy*fdt;
+        if(this.x<AR.l+this.r){this.x=AR.l+this.r;this.qsDir=Math.PI-this.qsDir;this.qsDirT=0;}
+        if(this.x>AR.r-this.r){this.x=AR.r-this.r;this.qsDir=Math.PI-this.qsDir;this.qsDirT=0;}
+        if(this.y<AR.t+this.r){this.y=AR.t+this.r;this.qsDir=-this.qsDir;this.qsDirT=0;}
+        if(this.y>AR.b-this.r){this.y=AR.b-this.r;this.qsDir=-this.qsDir;this.qsDirT=0;}
+        if(Math.random()<.6)spawnSparks(this.x,this.y,'#4de1ff',2,200);
+        if(this.qsLeft<=0){
+          this.qsActive=false;this.ghost=false;
+          targetTS=1;timeScale=1;
+          this.qsSkillT=rand(12,20);
+          addRing(this.x,this.y,'#4de1ff',this.r*1.8);
+          spawnSparks(this.x,this.y,'#9fe9ff',8,300);
+          shake+=4;sfx('qsEnd');
+        }
+        return;
+      }
     }
     if(this.w==='dagger'&&this.vanishState===2){
       this.vanishLeft-=dt;
@@ -1289,11 +1364,11 @@ class Ball{
               this.hp=Math.min(this.maxHp,this.hp+5);
               addFloater(this.x,this.y-this.r-30,'+5 HP','#7dff8a');
               spawnSparks(this.x,this.y,'#7dff8a',6,140);
-              this.zExtra++;
-              addFloater(this.x,this.y-this.r-74,'HORDE +1','#a5e89f');
+              this.zExtra+=2;
+              addFloater(this.x,this.y-this.r-74,'HORDE +2','#a5e89f');
               if(e.hp<=0)kill(e);
             }
-            this.hordeT=Math.max(0,this.hordeT-1);
+            if(!balls.some(b=>b.zMini&&b.alive))this.hordeT=Math.max(0,this.hordeT-1);
           }
           if(this.biteLeft<=0){
             this.zState=3;this.retreatLeft=.55;
@@ -1303,8 +1378,10 @@ class Ball{
           this.retreatLeft-=dt;
           if(this.retreatLeft<=0){this.zState=0;this.zCd=2;}
         }
-        this.hordeT-=dt;
-        if(this.hordeT<=0){this.hordeT=rand(20,30);this.hordeMax=this.hordeT;spawnHorde(this);}
+          if(!balls.some(b=>b.zMini&&b.alive)){
+            this.hordeT-=dt;
+            if(this.hordeT<=0){this.hordeT=rand(20,30);this.hordeMax=this.hordeT;spawnHorde(this);}
+          }
       }
     }
     if(this.w==='throwStar'){
@@ -1355,19 +1432,20 @@ class Ball{
         }
       }
     }
-    if(!(this.w==='zombie'&&this.zMini))this.vy+=GRAV*dt;
-    const dr=Math.exp(-.03*dt);this.vx*=dr;this.vy*=dr;
+    if(this.w==='quicksilver')this.vy+=GRAV*.55*dt;
+    else if(!(this.w==='zombie'&&this.zMini))this.vy+=GRAV*dt;
+    const dr=Math.exp((this.w==='quicksilver'?0:.03)*-dt);this.vx*=dr;this.vy*=dr;
     let sp=Math.hypot(this.vx,this.vy);
-    if(sp>this.cap){this.vx*=this.cap/sp;this.vy*=this.cap/sp;sp=this.cap;}
+    if(sp>this.cap&&this.w!=='quicksilver'){this.vx*=this.cap/sp;this.vy*=this.cap/sp;sp=this.cap;}
     this.x+=this.vx*dt*inf;this.y+=this.vy*dt*inf;
-    const R=.92;
+    const R=this.w==='quicksilver'?1:.92;
     if(this.x<this.r+AR.l){this.x=this.r+AR.l;this.vx=Math.abs(this.vx)*R;this.wallSlam();}
     if(this.x>AR.r-this.r){this.x=AR.r-this.r;this.vx=-Math.abs(this.vx)*R;this.wallSlam();}
     if(this.y<this.r+AR.t){this.y=this.r+AR.t;this.vy=Math.abs(this.vy)*R;this.wallSlam();}
-    if(this.y>AR.b-this.r){this.y=AR.b-this.r;this.vy=-Math.abs(this.vy)*R;this.vx*=.995;this.wallSlam();}
-    if(sp<220&&!frozen&&this.w!=='zombie'&&!(this.w==='bow'&&this.chargeState>0)){this.stall+=dt;
-      if(this.stall>.7){this.stall=0;
-        const ja=rand(0,Math.PI*2),js=rand(520,820);
+    if(this.y>AR.b-this.r){this.y=AR.b-this.r;this.vy=-Math.abs(this.vy)*R;if(this.w!=='quicksilver')this.vx*=.995;this.wallSlam();}
+    if(sp<(this.w==='quicksilver'?Math.max(300,this.qsBoost*420):220)&&!frozen&&this.w!=='zombie'&&!(this.w==='bow'&&this.chargeState>0)){this.stall+=dt;
+      if(this.stall>(this.w==='quicksilver'?.3:.7)){this.stall=0;
+        const ja=rand(0,Math.PI*2),js=rand(520,820)*(this.w==='quicksilver'?(.8+this.qsBoost*.7):1);
         this.vx+=Math.cos(ja)*js;this.vy+=Math.sin(ja)*js-260;
         addRing(this.x,this.y,this.color,ballR*.55);
         spawnSparks(this.x,this.y,this.color,12,300);
@@ -1732,6 +1810,130 @@ class Ball{
   }
 }
 
+// Shared satellite geometry keeps previews, rendering and collision points aligned.
+function gravityOrbitRadius(b){
+  // Three seconds out, one second at maximum reach, three seconds back.
+  const t=(b.gwOrbitTime||0)%GW.orbitPeriod,travel=(GW.orbitPeriod-GW.orbitHold)*.5;
+  let expansion=1;
+  if(t<travel)expansion=(1-Math.cos(t/travel*Math.PI))*.5;
+  else if(t>travel+GW.orbitHold)expansion=(1+Math.cos((t-travel-GW.orbitHold)/travel*Math.PI))*.5;
+  return b.r*(GW.orbit+(GW.orbitMax-GW.orbit)*expansion);
+}
+function gravityChargeLimit(b){return b.gwMaxCharge||GW.maxCharge;}
+function gravityOrbCharges(b){return Math.min(gravityChargeLimit(b),Math.max(0,b.gwCharge||0));}
+function gravitySatellites(b){
+  const pts=[],radius=gravityOrbitRadius(b),count=GW.satellites+gravityOrbCharges(b);
+  for(let k=0;k<count;k++){
+    const a=b.ang+k/count*Math.PI*2;
+    pts.push({x:b.x+Math.cos(a)*radius,y:b.y+Math.sin(a)*radius,a,extra:k>=GW.satellites});
+  }
+  return pts;
+}
+function gainGravityOrb(b){
+  const charge=gravityOrbCharges(b),cap=gravityChargeLimit(b);
+  if(charge>=cap)return;
+  b.gwCharge=charge+1;
+  const pts=gravitySatellites(b),p=pts[pts.length-1];
+  spawnSparks(p.x,p.y,'#67e8f9',5,100);
+  if(b.gwCharge===cap){
+    addFloater(b.x,b.y-b.r-34,tt('ORB CHARGES FULL!','CARICHE SFERA PIENE!'),'#67e8f9');
+    addRing(b.x,b.y,'#67e8f9',b.r*2);sfx('pop');
+  }
+}
+// Transfer paths and timers live on the fighter, so pause, freeze and replay preserve them.
+function gravityFeedPosition(b,p,t){
+  const e=t*t*(3-2*t),m=1-e;
+  return {x:m*m*p.x+2*m*e*p.cx+e*e*b.gwX,y:m*m*p.y+2*m*e*p.cy+e*e*b.gwY};
+}
+function updateGravityAbsorption(b,dt){
+  b.gwAge+=dt;b.gwPulse=Math.max(0,b.gwPulse-dt*4);
+  let absorbed=0,strength=0;
+  for(const p of b.gwFeed){
+    const sinceArrival=b.gwAge-p.delay-GW.feedFlight;
+    if(sinceArrival>=0)absorbed++;
+    const t=Math.max(0,Math.min(1,sinceArrival/GW.feedGrowth));
+    strength+=t*t*(3-2*t);
+  }
+  b.gwStrength=strength;
+  b.gwRadius=b.r*GW.fieldRadius*(1+strength*GW.chargeRadius);
+  // Pull uses the cast's consumed charges immediately, independent of visual absorption.
+  b.gwPull=GW.pull*(1+b.gwPower*GW.chargePull);
+  if(absorbed>b.gwAbsorbed){
+    b.gwPulse=1;
+    spawnSparks(b.gwX,b.gwY,'#67e8f9',Math.min(16,(absorbed-b.gwAbsorbed)*4),140);
+    addRing(b.gwX,b.gwY,'#67e8f9',b.gwRadius*.4,b.r*.35);
+    sfx('tick');
+  }
+  b.gwAbsorbed=absorbed;
+}
+function gravityTarget(b,o){
+  return o.alive&&o.team!==b.team&&!o.ghost&&!o.zLatch&&
+    !(o.w==='zombie'&&(o.zState===2||o.zIFrames>simTime));
+}
+function updateGravityWarden(b,dt){
+  b.gwOrbitTime=((b.gwOrbitTime||0)+dt)%GW.orbitPeriod;
+  b.gwCooldown=Math.max(0,b.gwCooldown-dt);
+  if(b.gwLeft>0){
+    const activeDt=Math.min(dt,b.gwLeft);
+    b.gwLeft=Math.max(0,b.gwLeft-dt);
+    updateGravityAbsorption(b,activeDt);
+    const burst=b.gwLeft===0;
+    for(const o of balls){
+      if(!gravityTarget(b,o))continue;
+      const dx=b.gwX-o.x,dy=b.gwY-o.y,d=Math.hypot(dx,dy);
+      if(d>b.gwRadius+o.r)continue;
+      if(burst){
+        const raw=drDmg(o,GW.burst+b.gwPower*GW.chargeDamage);
+        o.hp-=raw;o.flash=1;
+        addFloater(o.x,o.y-o.r-28,'-'+fmtD(raw)+' '+tt('COLLAPSE','COLLASSO'),'#d8b4fe');
+        if(!o.impOwner&&!(o.mageIceUntil>simTime)){
+          const a=d>0?Math.atan2(-dy,-dx):b.ang;
+          o.vx+=Math.cos(a)*650;o.vy+=Math.sin(a)*650;
+        }
+        spawnSparks(o.x,o.y,'#c4b5fd',12,260);
+        if(o.hp<=0)kill(o);
+      }else if(d>0&&!o.impOwner&&!(o.mageIceUntil>simTime)){
+        // Full charge-based force is active while absorption grows the influence radius.
+        const pull=b.gwPull*Math.max(.2,1-d/(b.gwRadius+o.r))*activeDt;
+        o.vx+=dx/d*pull;o.vy+=dy/d*pull;
+      }
+    }
+    if(burst){
+      addRing(b.gwX,b.gwY,'#c4b5fd',b.gwRadius,b.gwRadius*.12);
+      addRing(b.gwX,b.gwY,'#67e8f9',b.gwRadius*.7);
+      spawnSparks(b.gwX,b.gwY,'#a78bfa',30,400);
+      shake+=7;hitstop=Math.max(hitstop,.08);sfx('gravityBurst');
+    }
+    return;
+  }
+  if(b.gwCooldown>0)return;
+  let target=null,nearest=Infinity;
+  for(const o of balls){
+    if(!gravityTarget(b,o))continue;
+    const d=Math.hypot(o.x-b.x,o.y-b.y);
+    if(d<nearest){nearest=d;target=o;}
+  }
+  if(!target)return;
+  b.gwX=Math.max(AR.l,Math.min(AR.r,target.x));
+  b.gwY=Math.max(AR.t,Math.min(AR.b,target.y));
+  // Snapshot only the extra orbs before resetting charges; new hits belong to the next cast.
+  const extras=gravitySatellites(b).slice(GW.satellites),dir=b.rotDir||1;
+  b.gwPower=extras.length;
+  b.gwFeed=extras.map((p,i)=>{
+    const dx=b.gwX-p.x,dy=b.gwY-p.y;
+    return {x:p.x,y:p.y,cx:(p.x+b.gwX)*.5-dy*.35*dir,cy:(p.y+b.gwY)*.5+dx*.35*dir,
+      delay:GW.openDuration+(extras.length>1?i/(extras.length-1)*GW.feedStagger:0)};
+  });
+  b.gwCastDuration=GW.openDuration+(extras.length?GW.feedFlight+GW.feedGrowth+(extras.length>1?GW.feedStagger:0):0);
+  b.gwAge=0;b.gwAbsorbed=0;b.gwStrength=0;b.gwPull=GW.pull*(1+b.gwPower*GW.chargePull);b.gwPulse=0;
+  b.gwRadius=b.r*GW.fieldRadius;b.gwLeft=b.gwCastDuration+GW.duration;
+  b.gwCharge=0;b.gwMaxCharge=gravityChargeLimit(b)+GW.chargeCapacityGain;
+  b.gwCooldown=rand(GW.cooldownMin,GW.cooldownMax);b.gwCooldownMax=b.gwCooldown;
+  addFloater(b.x,b.y-b.r-42,tt('SINGULARITY!','SINGOLARIT\u00c0!'),'#c4b5fd');
+  addRing(b.gwX,b.gwY,'#a78bfa',b.gwRadius);
+  sfx('gravityCast');
+}
+
 function spawnSparks(x,y,color,n,pow){
   for(let i=0;i<n;i++){const a=rand(0,Math.PI*2),s=rand(40,pow);
     particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-40,life:rand(.25,.6),max:.6,color,size:rand(1.5,3.5)});}
@@ -1766,14 +1968,19 @@ const drDmg=(b,amt,noZap)=>{
 };
 
 function tryHit(a,b,px,py,isProj,dirx,diry){
-  if(a.ghost||b.ghost||b.zLatch)return;
+  if((a.ghost&&!(a.w==='quicksilver'&&a.qsActive))||b.ghost||b.zLatch)return;
   if(b.w==='zombie'&&(b.zState===2||b.zIFrames>simTime))return;
   if(a.team===b.team)return;
   if(a.w==='vlad' && impales.some(im=>im.ownerId===a.id))return;
-  const key=isProj?('p'+a.own+'_'+b.id):(a.id+'_'+b.id);
-  if((hitCd.get(key)||0)>simTime)return;
-  const cd=isProj?0:(a.w==='dagger'?Math.max(.03,Math.PI/(a.def.spd*a.spdMul)):.22);
-  hitCd.set(key,simTime+cd);
+  if(a.w==='quicksilver'&&a.qsActive&&!isProj){
+    if((a.qsHitCdT||0)>0)return;
+    a.qsHitCdT=.22;
+  }else{
+    const key=isProj?('p'+a.own+'_'+b.id):(a.id+'_'+b.id);
+    if((hitCd.get(key)||0)>simTime)return;
+    const cd=isProj?0:(a.w==='dagger'?Math.max(.03,Math.PI/(a.def.spd*a.spdMul)):.22);
+    hitCd.set(key,simTime+cd);
+  }
   let blocked=false;
   if(b.def.block&&!isProj){
     const threat=Math.atan2(a.y-b.y,a.x-b.x);
@@ -1784,6 +1991,9 @@ function tryHit(a,b,px,py,isProj,dirx,diry){
   }
   const owner=isProj?balls.find(x=>x.id===a.own):a;
   let raw=isProj?a.dmg:(a.w==='staff'?a.def.dmg:(a.def.dmg+a.dmgBonus));
+  if(a.w==='quicksilver'){
+    raw=Math.max(.5,Math.max(1,a.def.dmg+a.dmgBonus)*a.qsBoost*.5);
+  }
   if(blocked){
     spawnSparks(px,py,'#7de3ff',12,240);
     addFloater(b.x,b.y-b.r-24,'REFLECT!','#7de3ff');
@@ -1804,7 +2014,7 @@ function tryHit(a,b,px,py,isProj,dirx,diry){
   else{
     const dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy)||1,nx=dx/d,ny=dy/d;
     b.vx+=nx*K;b.vy+=ny*K-LIFT;
-    const rec=(a.w==='shield'&&a.prepLeft>0)?0:70;
+    const rec=(a.w==='quicksilver'||(a.w==='shield'&&a.prepLeft>0))?0:70;
     a.vx-=nx*rec;a.vy-=ny*rec;
     if(a.w==='hammer'){b.wallMark=simTime+.95;b.wallGiant=a.giantUntil>simTime;}
   }
@@ -1813,6 +2023,13 @@ function tryHit(a,b,px,py,isProj,dirx,diry){
   sfx('hit');shake+=Math.min(9,raw*.4);
   hitstop=!isProj&&a.w==='hammer'?.1:.055;
   if(!isProj&&a.w==='hammer')addRing(px,py,'#ffd76b',ballR*.7);
+  if(!isProj&&a.w==='gravity'&&raw>0&&gravityOrbCharges(a)<gravityChargeLimit(a))gainGravityOrb(a);
+  if(!isProj&&a.w==='quicksilver'){
+    a.qsBoost+=.5;
+    addFloater(a.x,a.y-a.r-30,'BOOST \u00d7'+a.qsBoost.toFixed(1),'#4de1ff');
+    spawnSparks(a.x,a.y,'#4de1ff',6,220);
+    sfx('qsBoost');
+  }
   if(!isProj&&a.w==='scythe'){
     const h=Math.max(.1,raw);
     a.hp=Math.min(a.maxHp,a.hp+h);
@@ -1853,7 +2070,8 @@ function soulStrike(a,so,px,py){
   a.skill();
   if(v.hp<=0){for(let i=souls.length-1;i>=0;i--)if(souls[i].eid===v.id)souls.splice(i,1);kill(v);}
 }
-function kill(b){  b.alive=false;
+function kill(b){
+  b.alive=false;
   for(let i=impales.length-1;i>=0;i--){const im=impales[i];
     if(im.victimId===b.id||im.ownerId===b.id){
       const vd=balls.find(o=>o.id===im.victimId);if(vd&&vd.alive)vd.impOwner=null;
@@ -2059,7 +2277,7 @@ function spawnHorde(o){
     const x=leftSide?AR.l-rand(30,90):AR.r+rand(30,90);
     const y=rand(AR.t+60,AR.b-60);
     const m=new Ball('zombie',x,y,o.team,o.color);
-    m.isClone=true;m.zMini=true;m.hp=8;m.maxHp=8;m.r=o.r*.5;m.cap=430;
+    m.isClone=true;m.zMini=true;m.hp=1;m.maxHp=1;m.r=o.r*.5;m.cap=430;
     m.zEnter=true;
     m.zWp={x:leftSide?AR.l+rand(80,200):AR.r-rand(80,200),y};
     balls.push(m);
@@ -2148,7 +2366,7 @@ for(let i=impales.length-1;i>=0;i--){
         if(d<min&&d>0){
           const nx=dx/d,ny=dy/d,ov=(min-d)/2;
           const ap=a.w==='katana'&&a.dashState===1,bp=b.w==='katana'&&b.dashState===1;
-          const ap2=ap||(a.w==='shield'&&a.prepLeft>0),bp2=bp||(b.w==='shield'&&b.prepLeft>0);
+          const ap2=ap||(a.w==='shield'&&a.prepLeft>0)||a.w==='quicksilver',bp2=bp||(b.w==='shield'&&b.prepLeft>0)||b.w==='quicksilver';
           const aImp=!!a.impOwner,bImp=!!b.impOwner;
           if(!aImp){a.x-=nx*ov*(ap2?0:bp2?1:.5);a.y-=ny*ov*(ap2?0:bp2?1:.5);}
           if(!bImp){b.x+=nx*ov*(bp2?0:ap2?1:.5);b.y+=ny*ov*(bp2?0:ap2?1:.5);}
@@ -2157,8 +2375,12 @@ for(let i=impales.length-1;i>=0;i--){
           if(bImp){b.x=b.pinX;b.y=b.pinY;}
           const vr=(b.vx-a.vx)*nx+(b.vy-a.vy)*ny;
           if(vr<0){const jm=-(1+.98)*vr/2;
-            if(!ap2){a.vx-=jm*nx;a.vy-=jm*ny;}
-            if(!bp2){b.vx+=jm*nx;b.vy+=jm*ny;}}
+            if(a.w==='quicksilver'){if(!bImp&&!bp2){b.vx+=jm*2*nx;b.vy+=jm*2*ny;}}
+            else if(b.w==='quicksilver'){if(!aImp&&!ap2){a.vx-=jm*2*nx;a.vy-=jm*2*ny;}}
+            else{
+              if(!ap2){a.vx-=jm*nx;a.vy-=jm*ny;}
+              if(!bp2){b.vx+=jm*nx;b.vy+=jm*ny;}
+            }}
         }else if(d>min*1.05&&d>0){
           const aS=a.w==='scythe'&&souls.some(s=>s.oTeam===a.team)&&b.team!==a.team;
           const bS=b.w==='scythe'&&souls.some(s=>s.oTeam===b.team)&&a.team!==b.team;
@@ -2184,7 +2406,19 @@ for(let i=impales.length-1;i>=0;i--){
       const gs=a.w==='hammer'?a.wsc():1;
       const MP=(px,py)=>[a.x+ca*(a.r+(px-30)*wf*gs)-sa*py*wf*gs,a.y+sa*(a.r+(px-30)*wf*gs)+ca*py*wf*gs];
       const spts=[];
-      if(a.w==='sword'){
+      if(a.w==='gravity'){
+        const orbs=gravitySatellites(a),spin=a.gwSpin||0;
+        for(const p of orbs){
+          spts.push([p.x,p.y]);
+          if(Math.abs(spin)>0){
+            const orad=gravityOrbitRadius(a),steps=Math.min(8,Math.ceil(Math.abs(spin)*orad/7));
+            for(let s=1;s<steps;s++){
+              const aa=p.a-spin*(s/steps);
+              spts.push([a.x+Math.cos(aa)*orad,a.y+Math.sin(aa)*orad]);
+            }
+          }
+        }
+      }else if(a.w==='sword'){
         for(const[x,y]of[[55,0],[(55+T)/2,0],[T-4,0],[T,0]])spts.push(MP(x,y));
       }else if(a.w==='katana'){
         for(let k=0;k<=4;k++){const t=k/4;spts.push(MP(54+(T-54)*t,0));}
@@ -2205,6 +2439,11 @@ for(let i=impales.length-1;i>=0;i--){
         const p0=T*.9667,cx=T*.9278,cy=-T*.2478*sy2,p1x=T*.8889,p1y=-T*.3444*sy2;
         for(const[sx,sy3]of[[34,0],[(34+T)/2,0],[T-8,0]])spts.push(MP(sx,sy3));
         for(let k=0;k<=6;k++){const t=k/6,m=1-t;spts.push(MP(m*m*p0+2*m*t*cx+t*t*p1x,2*m*t*cy+t*t*p1y));}
+      }else if(a.w==='quicksilver'){
+        for(let k=0;k<28;k++){
+          const qa=k/28*Math.PI*2;
+          spts.push([a.x+Math.cos(qa)*a.r,a.y+Math.sin(qa)*a.r]);
+        }
       }else{
         const n=Math.max(2,Math.min(16,Math.ceil((reach-a.r)/34)));
         for(let k=1;k<=n;k++){
@@ -2214,7 +2453,7 @@ for(let i=impales.length-1;i>=0;i--){
       }
       for(const b of balls){
         if(!b.alive||b.id===a.id||b.team===a.team)continue;
-        const R=b.r*1.03;
+        const R=a.w==='gravity'?b.r+a.r*GW.satelliteRadius:b.r*1.03;
         for(const[px,py]of spts){
           if(Math.hypot(px-b.x,py-b.y)<R){tryHit(a,b,px,py,false);break;}
         }
@@ -2231,8 +2470,10 @@ for(let i=impales.length-1;i>=0;i--){
       const a=balls[i];if(!a.alive)continue;
       for(let j=i+1;j<balls.length;j++){
         const b=balls[j];if(!b.alive)continue;
-        if(a.ghost||b.ghost||a.zLatch||b.zLatch||a.impOwner||b.impOwner||a.mageIceUntil>simTime||b.mageIceUntil>simTime||(clashCd.get(a.id+'_'+b.id)||0)>simTime)continue;
+        if(a.ghost||b.ghost||a.w==='quicksilver'||b.w==='quicksilver'||a.zLatch||b.zLatch||a.impOwner||b.impOwner||a.mageIceUntil>simTime||b.mageIceUntil>simTime||(clashCd.get(a.id+'_'+b.id)||0)>simTime)continue;
         if(a.team===b.team)continue;
+        // Energy satellites do not have a solid shaft to clash with weapons.
+        if(a.w==='gravity'||b.w==='gravity')continue;
         if(a.w==='hammer'&&a.giantUntil>simTime||b.w==='hammer'&&b.giantUntil>simTime)continue;
         if((a.w==='scythe'&&a.reapState===2)||(b.w==='scythe'&&b.reapState===2))continue;
           if(a.w==='spear'&&a.lenMul>=3||b.w==='spear'&&b.lenMul>=3)continue;
@@ -2397,7 +2638,8 @@ sfx('clone');
         if(p.y<AR.t+R&&p.vy<0){p.vy=-p.vy;bounced=true;}
         if(p.y>AR.b-R&&p.vy>0){p.vy=-p.vy;bounced=true;}
         if(bounced){
-          if(p.bounce<p.maxBounce){p.bounce++;spawnSparks(p.x,p.y,'#8af',6,160);sfx('tick');}
+          const ownerBall=balls.find(b=>b.id===p.own);
+          if(p.bounce<p.maxBounce){p.bounce++;if(ownerBall&&ownerBall.w==='throwStar')p.dmg+=0.2;spawnSparks(p.x,p.y,'#8af',6,160);sfx('tick');}
           else dead=true;
         }
       }else{
@@ -2406,7 +2648,8 @@ sfx('clone');
       }
       if(!dead)for(const b of balls){
         if(!b.alive||b.id===p.own||b.ghost)continue;
-        if(Math.hypot(p.x-b.x,p.y-b.y)<b.r+R){
+        const overlap=p.kind==='reap'?reapOverlaps(p,b,R):Math.hypot(p.x-b.x,p.y-b.y)<b.r+R;
+        if(overlap){
           const d=Math.hypot(p.vx,p.vy)||1;
           if(p.kind==='mageorb'){
             const raw=drDmg(b,p.dmg);
@@ -2517,7 +2760,116 @@ function rr(x,y,w,h,r){
   ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();
 }
 
+function drawGravitorOrb(x,y,sr,angle,extra){
+  ctx.save();ctx.translate(x,y);
+  const glow=extra?'#67e8f9':'#60a5fa';
+  // Luminous plasma core inside a segmented metallic containment shell.
+  ctx.shadowColor=glow;ctx.shadowBlur=sr*2.5;
+  const core=ctx.createRadialGradient(-sr*.28,-sr*.32,sr*.06,0,0,sr);
+  core.addColorStop(0,'#ffffff');core.addColorStop(.25,'#e0faff');
+  core.addColorStop(.55,extra?'#22d3ee':'#60a5fa');core.addColorStop(1,'#12344d');
+  ctx.fillStyle=core;ctx.beginPath();ctx.arc(0,0,sr,0,Math.PI*2);ctx.fill();
+  ctx.shadowBlur=0;ctx.strokeStyle='#c8e6f0';ctx.lineWidth=Math.max(.5,sr*.12);ctx.stroke();
+  ctx.save();ctx.rotate(angle);
+  for(let k=0;k<3;k++){
+    const a=k*Math.PI*2/3;
+    ctx.strokeStyle='#526d83';ctx.lineWidth=sr*.22;
+    ctx.beginPath();ctx.arc(0,0,sr*.89,a+.12,a+1.38);ctx.stroke();
+    ctx.strokeStyle='#ecfeff';ctx.lineWidth=Math.max(.4,sr*.06);
+    ctx.beginPath();ctx.arc(0,0,sr*.94,a+.18,a+.95);ctx.stroke();
+  }
+  ctx.strokeStyle=glow;ctx.lineWidth=Math.max(.5,sr*.10);
+  ctx.shadowColor=glow;ctx.shadowBlur=sr;
+  ctx.beginPath();ctx.ellipse(0,0,sr*1.28,sr*.43,-.45,0,Math.PI*2);ctx.stroke();
+  ctx.strokeStyle='rgba(224,250,255,.7)';
+  ctx.beginPath();ctx.ellipse(0,0,sr*1.13,sr*.56,.75,0,Math.PI*2);ctx.stroke();
+  ctx.fillStyle='#ffffff';
+  for(let k=0;k<2;k++){
+    const a=angle*.7+k*Math.PI;
+    ctx.beginPath();ctx.arc(Math.cos(a)*sr*1.15,Math.sin(a)*sr*.43,sr*.12,0,Math.PI*2);ctx.fill();
+  }
+  ctx.restore();
+  ctx.fillStyle='rgba(255,255,255,.9)';
+  ctx.beginPath();ctx.ellipse(-sr*.26,-sr*.32,sr*.24,sr*.14,-.6,0,Math.PI*2);ctx.fill();
+  ctx.restore();
+}
+function drawGravityWarden(b){
+  // Leave the standard player-colored ball untouched; all detail belongs to the orbs.
+  ctx.save();ctx.translate(b.x,b.y);
+  const r=b.r,orbit=gravityOrbitRadius(b),sr=r*GW.satelliteRadius,charge=gravityOrbCharges(b);
+  ctx.strokeStyle='rgba(125,211,252,.14)';ctx.lineWidth=Math.max(.5,r*.018);
+  ctx.beginPath();ctx.arc(0,0,orbit,0,Math.PI*2);ctx.stroke();
+  const dir=b.rotDir||1,tail=Math.min(.9,.35+charge*.05);
+  for(const p of gravitySatellites(b)){
+    for(let k=4;k>0;k--){
+      ctx.strokeStyle='rgba(103,232,249,'+(.1+(4-k)*.1)+')';ctx.lineWidth=sr*(.15+(4-k)*.13);
+      ctx.beginPath();ctx.arc(0,0,orbit,p.a-dir*tail*k/4,p.a-dir*tail*(k-1)/4,dir<0);ctx.stroke();
+    }
+    drawGravitorOrb(p.x-b.x,p.y-b.y,sr,p.a*2,p.extra);
+  }
+  ctx.restore();
+}
+function drawGravityWell(b){
+  if(!(b.gwLeft>0))return;
+  ctx.save();ctx.translate(b.gwX,b.gwY);
+  const r=b.gwRadius,progress=Math.max(0,1-b.gwLeft/GW.duration),feeding=b.gwLeft>GW.duration;
+  const strength=b.gwStrength||0,growth=1+strength*GW.chargeRadius,pulse=b.gwPulse||0;
+  const age=b.gwAge||0,spin=age*(2+(b.gwPower||0)*GW.chargePull);
+  const coreR=b.r*(.35+progress*.18)*growth;
+  const aura=ctx.createRadialGradient(0,0,0,0,0,r);
+  aura.addColorStop(0,'rgba(5,2,15,.92)');aura.addColorStop(.35,'rgba(109,40,217,.30)');aura.addColorStop(1,'rgba(109,40,217,0)');
+  ctx.fillStyle=aura;ctx.beginPath();ctx.arc(0,0,r,0,Math.PI*2);ctx.fill();
+  // This growing boundary is also the actual pull and burst hit area.
+  ctx.strokeStyle='rgba(196,181,253,.65)';ctx.lineWidth=1.5;ctx.setLineDash([7,6]);
+  ctx.beginPath();ctx.arc(0,0,r,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+  for(let i=0;i<3;i++){
+    const f=1-(((feeding?age*.4:progress)+i/3)%1),rr=r*(.13+.87*f);
+    ctx.strokeStyle='rgba(167,139,250,'+(.15+.45*(1-f))+')';ctx.lineWidth=1+2*(1-f);
+    ctx.beginPath();ctx.ellipse(0,0,rr,rr*.68,spin*.4+i,0,Math.PI*2);ctx.stroke();
+  }
+  for(let i=0;i<12;i++){
+    const f=1-((age*.8+i/12)%1),a=spin+i*2.4;
+    ctx.fillStyle=i%2?'#c4b5fd':'#67e8f9';ctx.globalAlpha=.25+.65*(1-f);
+    ctx.beginPath();ctx.arc(Math.cos(a)*r*f,Math.sin(a)*r*f,1.2+b.r*.025,0,Math.PI*2);ctx.fill();
+  }
+  ctx.globalAlpha=1;
+  // A default black hole appears first. Cyan extra orbs then leave their saved orbit positions.
+  for(const p of b.gwFeed||[]){
+    const t=Math.max(0,(age-p.delay)/GW.feedFlight);
+    if(t>=1)continue;
+    const point=gravityFeedPosition(b,p,t),sr=b.r*GW.satelliteRadius*(1-.65*t*t);
+    ctx.strokeStyle='rgba(103,232,249,.12)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(p.x-b.gwX,p.y-b.gwY);
+    ctx.quadraticCurveTo(p.cx-b.gwX,p.cy-b.gwY,0,0);ctx.stroke();
+    for(let j=4;j>0;j--){
+      const tail=gravityFeedPosition(b,p,Math.max(0,t-j*.045));
+      ctx.globalAlpha=(1-j/5)*.35;ctx.fillStyle='#67e8f9';
+      ctx.beginPath();ctx.arc(tail.x-b.gwX,tail.y-b.gwY,sr*(1-j*.12),0,Math.PI*2);ctx.fill();
+    }
+    ctx.globalAlpha=1;
+    drawGravitorOrb(point.x-b.gwX,point.y-b.gwY,sr,age*8+p.delay,true);
+  }
+  // Accretion discs, core size and glow intensify as each orb is absorbed.
+  ctx.shadowColor='#67e8f9';ctx.shadowBlur=Math.min(60,b.r*(.4+strength*.05+pulse*.4));
+  ctx.strokeStyle='#67e8f9';ctx.lineWidth=b.r*(.035+pulse*.025);
+  ctx.beginPath();ctx.ellipse(0,0,coreR*2.1,coreR*.55,-.4,0,Math.PI*2);ctx.stroke();
+  ctx.strokeStyle='#c4b5fd';
+  ctx.beginPath();ctx.ellipse(0,0,coreR*1.65,coreR*.7,spin*.3,0,Math.PI*2);ctx.stroke();
+  ctx.fillStyle='#030108';ctx.strokeStyle='#e9d5ff';ctx.lineWidth=2;
+  ctx.beginPath();ctx.arc(0,0,coreR,0,Math.PI*2);ctx.fill();ctx.stroke();
+  if(pulse>0){
+    ctx.globalAlpha=pulse*.75;ctx.strokeStyle='#67e8f9';ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(0,0,coreR*(1+(1-pulse)*1.5),0,Math.PI*2);ctx.stroke();
+  }
+  ctx.globalAlpha=1;ctx.shadowBlur=0;ctx.fillStyle='#e9d5ff';ctx.font='700 '+Math.max(10,Math.round(b.r*.3))+'px Consolas,monospace';ctx.textAlign='center';
+  const label=feeding?(age<GW.openDuration?tt('SINGULARITY','SINGOLARIT\u00c0'):tt('ABSORBING ','ASSORBIMENTO ')+b.gwAbsorbed+'/'+b.gwPower):tt('COLLAPSE ','COLLASSO ')+b.gwLeft.toFixed(1)+'s';
+  ctx.fillText(label,0,-coreR*2.2);
+  ctx.fillStyle='#67e8f9';ctx.fillText(tt('PULL x','ATTRAZIONE x')+(b.gwPull/GW.pull).toFixed(2),0,coreR*2.2+b.r*.3);
+  ctx.restore();
+}
+
 function drawWeapon(b){
+  if(b.w==='gravity'){drawGravityWarden(b);return;}
   if(b.w==='scythe'&&b.reapState===2)return;
   const u=b.r/30,s=30,s0=s+2,len=s*b.def.mul*b.lenMul,tip=s+len;
   ctx.save();
@@ -2986,10 +3338,21 @@ function drawWeapon(b){
     const bite=b.zState===2?1-Math.max(0,b.biteLeft)/1:0;
     const grab=bite>0?Math.sin(Math.min(1,bite*1.6)*Math.PI*.5)*.55:0;
     const wig=Math.sin(simTime*3.2+(b.id||0))*.08;
+    // Draw relative to the ball center, without the weapon-tip offset.
+    ctx.restore();ctx.save();
+    ctx.translate(b.x,b.y);ctx.rotate(b.ang);ctx.scale(u,u);
+    const shoulderY=12,shoulderX=Math.sqrt(s*s-shoulderY*shoulderY)-2;
     for(const sy of[-1,1]){
       ctx.save();
-      ctx.rotate(sy*(1.5-wig-grab));
-      ctx.translate(33+grab*4,0);
+      const handX=43+grab*4,handY=sy*(11+wig*8-grab*4);
+      // Overlap the body and palm so the arms stay attached throughout the grab.
+      ctx.lineCap='round';ctx.lineJoin='round';
+      ctx.beginPath();ctx.moveTo(shoulderX,sy*shoulderY);
+      ctx.quadraticCurveTo(35,sy*shoulderY,handX,handY);
+      ctx.strokeStyle='#39582f';ctx.lineWidth=7;ctx.stroke();
+      ctx.strokeStyle='#79ad68';ctx.lineWidth=5;ctx.stroke();
+      ctx.translate(handX,handY);
+      ctx.rotate(-sy*grab*.15);
       ctx.fillStyle='#79ad68';
       ctx.beginPath();ctx.arc(0,0,4.2,0,7);ctx.fill();
       ctx.strokeStyle='#39582f';ctx.lineWidth=1;ctx.stroke();
@@ -3026,6 +3389,48 @@ function drawWeapon(b){
     ctx.fillStyle='#5a6672';ctx.beginPath();ctx.arc(0,0,sz*.18,0,7);ctx.fill();
     ctx.fillStyle='#b0bcc8';ctx.beginPath();ctx.arc(0,0,sz*.09,0,7);ctx.fill();
     ctx.shadowBlur=0;ctx.restore();
+  }else if(b.w==='quicksilver'){
+    ctx.restore();ctx.save();
+    ctx.translate(b.x,b.y);
+    const gl=b.qsActive?(.85+.15*Math.sin(performance.now()/24)):1;
+    const R=b.r;
+    ctx.save();
+    ctx.shadowColor='#4de1ff';ctx.shadowBlur=(b.qsActive?12:4)*gl*R/30;
+    const eyeOff=R*.35,eyeY=R*-.06,lensW=R*.22,lensH=R*.17;
+    const frameW=lensW+R*.055,frameH=lensH+R*.055;
+    for(const side of[-1,1]){
+      const cx=side*eyeOff,cy=eyeY;
+      ctx.fillStyle='#181e24';
+      ctx.beginPath();ctx.ellipse(cx,cy,frameW,frameH,0,0,Math.PI*2);ctx.fill();
+      const lg=ctx.createLinearGradient(cx,cy-lensH,cx,cy+lensH);
+      lg.addColorStop(0,'#6a3fcf');lg.addColorStop(.4,'#1d6ed8');lg.addColorStop(.7,'#07b3e8');lg.addColorStop(1,'#0b6aa8');
+      ctx.fillStyle=lg;
+      ctx.beginPath();ctx.ellipse(cx,cy,lensW,lensH,0,0,Math.PI*2);ctx.fill();
+      const shG=ctx.createLinearGradient(cx-lensW*.6,cy-lensH*.8,cx+lensW*.2,cy+lensH*.1);
+      shG.addColorStop(0,'rgba(255,255,255,.55)');shG.addColorStop(.5,'rgba(130,220,255,.2)');shG.addColorStop(1,'rgba(0,100,200,0)');
+      ctx.fillStyle=shG;
+      ctx.beginPath();ctx.ellipse(cx,cy,lensW,lensH,0,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='rgba(255,255,255,.85)';
+      ctx.beginPath();ctx.ellipse(cx-lensW*.38,cy-lensH*.45,lensW*.18,lensH*.14,-.4,0,Math.PI*2);ctx.fill();
+      ctx.strokeStyle='#2a3540';ctx.lineWidth=R*.035;
+      ctx.beginPath();ctx.ellipse(cx,cy,frameW,frameH,0,0,Math.PI*2);ctx.stroke();
+      if(b.qsActive){
+        ctx.strokeStyle=`rgba(77,225,255,${.6*gl})`;ctx.lineWidth=R*.04;
+        ctx.shadowColor='#4de1ff';ctx.shadowBlur=8*gl;
+        ctx.beginPath();ctx.ellipse(cx,cy,frameW+R*.05,frameH+R*.05,0,0,Math.PI*2);ctx.stroke();
+        ctx.shadowBlur=0;
+      }
+    }
+    const bx1=-eyeOff+lensW*.6,bx2=eyeOff-lensW*.6;
+    ctx.fillStyle='#2a3a4a';ctx.fillRect(bx1,eyeY-lensH*.24,bx2-bx1,lensH*.48);
+    const sx=eyeOff+frameW;
+    ctx.strokeStyle='rgba(100,160,190,.45)';ctx.lineWidth=R*.05;ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(sx,eyeY-lensH*.4);ctx.lineTo(sx+R*.18,eyeY-lensH*.45);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(sx,eyeY+lensH*.4);ctx.lineTo(sx+R*.18,eyeY+lensH*.45);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(-sx,eyeY-lensH*.4);ctx.lineTo(-sx-R*.18,eyeY-lensH*.45);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(-sx,eyeY+lensH*.4);ctx.lineTo(-sx-R*.18,eyeY+lensH*.45);ctx.stroke();
+    ctx.lineCap='butt';ctx.shadowBlur=0;ctx.restore();
+    ctx.restore();ctx.save();
   }
   ctx.restore();
 }
@@ -3225,60 +3630,89 @@ function drawMenuBg(rdt){
   menuT+=rdt;
   const t=menuT;
   const g=ctx.createLinearGradient(0,0,W,H);
-  g.addColorStop(0,'#0b0e14');g.addColorStop(.55,'#101627');g.addColorStop(1,'#161f38');
+  g.addColorStop(0,'#030404');g.addColorStop(.55,'#06080a');g.addColorStop(1,'#080d10');
   ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
-  ctx.globalCompositeOperation='lighter';
-  for(let i=0;i<3;i++){
-    const ax=W*(.5+.42*Math.sin(t*.11+i*2.1)),ay=H*(.5+.38*Math.cos(t*.09+i*1.7)),ar=Math.max(W,H)*.34;
-    const ag=ctx.createRadialGradient(ax,ay,10,ax,ay,ar);
-    ag.addColorStop(0,'hsla('+Math.round((200+t*6+i*70)%360)+',85%,60%,.10)');ag.addColorStop(1,'rgba(0,0,0,0)');
-    ctx.fillStyle=ag;ctx.fillRect(ax-ar,ay-ar,ar*2,ar*2);
-  }
-  ctx.globalAlpha=.15;ctx.strokeStyle='#7da8ff';ctx.lineWidth=1.5;
-  for(let i=0;i<2;i++){
-    const rr0=Math.min(W,H)*(.28+i*.12),a0=t*(.12+i*.07);
-    ctx.beginPath();ctx.arc(W/2,H/2,rr0,a0,a0+4.6);ctx.stroke();
-  }
-  ctx.globalAlpha=1;
+  ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over';
   for(const p of mbRise){
     p.y-=p.v*rdt;if(p.y<-.05){p.y=1.05;p.x=Math.random();}
     const px=p.x*W+Math.sin(t*p.sw+p.ph)*22,py=p.y*H;
-    ctx.globalAlpha=.3+.4*(.5+.5*Math.sin(t*2+p.ph));
-    ctx.fillStyle='hsla('+Math.round(p.hue)+',90%,72%,.9)';
+    ctx.globalAlpha=.04;
+    ctx.fillStyle='rgba(20,25,30,.05)';
     ctx.beginPath();ctx.arc(px,py,p.r,0,7);ctx.fill();
   }
   ctx.globalAlpha=1;
-  const pts=[];
-  for(const o of mbOrbs){
-    o.x=(o.x+o.vx*rdt+1)%1;o.y=(o.y+o.vy*rdt+1)%1;
-    const px=o.x*W,py=o.y*H;
-    pts.push([px,py]);
-    const gr=ctx.createRadialGradient(px,py,0,px,py,o.r*8);
-    gr.addColorStop(0,'hsla('+Math.round(o.hue)+',90%,70%,.45)');gr.addColorStop(1,'rgba(0,0,0,0)');
-    ctx.fillStyle=gr;ctx.beginPath();ctx.arc(px,py,o.r*8,0,7);ctx.fill();
-    ctx.fillStyle='rgba(255,255,255,.75)';
-    ctx.beginPath();ctx.arc(px,py,o.r*.55,0,7);ctx.fill();
-  }
-  ctx.strokeStyle='rgba(125,160,255,.14)';ctx.lineWidth=1;
-  for(let i=0;i<pts.length;i++)for(let j=i+1;j<pts.length;j++){
-    const dx=pts[i][0]-pts[j][0],dy=pts[i][1]-pts[j][1],dd=dx*dx+dy*dy;
-    if(dd<170*170){
-      ctx.globalAlpha=1-Math.sqrt(dd)/170;
-      ctx.beginPath();ctx.moveTo(pts[i][0],pts[i][1]);ctx.lineTo(pts[j][0],pts[j][1]);ctx.stroke();
-    }
-  }
   ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over';
   const vg=ctx.createRadialGradient(W/2,H/2,Math.min(W,H)*.42,W/2,H/2,Math.max(W,H)*.78);
-  vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(0,0,0,.52)');
+  vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(0,0,0,0)');
   ctx.fillStyle=vg;ctx.fillRect(0,0,W,H);
   if(!document.getElementById('scrSelect').classList.contains('hidden'))renderSpins(rdt);
-  if(!document.getElementById('scrMaps').classList.contains('hidden')){
+if(!document.getElementById('scrMaps').classList.contains('hidden')){
     const t=performance.now()/1000;
     document.querySelectorAll('#mapGrid .mapCard').forEach(card=>{
       const cv=card.querySelector('canvas');
       MAPS[+card.dataset.i].draw(cv.getContext('2d'),cv.width,cv.height,t);
     });
   }
+  drawColorFx(rdt);
+}
+function panelRect(){
+  const pw=Math.min(1020,W*.93),ph=Math.min(800,H*.93);
+  return[(W-pw)/2,(H-ph)/2,pw,ph];
+}
+function marginPt(){
+  const r=panelRect(),side=Math.floor(Math.random()*4);
+  if(side===0)return[Math.random()*r[0],Math.random()*H];
+  if(side===1)return[r[0]+r[2]+Math.random()*(W-r[0]-r[2]),Math.random()*H];
+  if(side===2)return[Math.random()*W,Math.random()*r[1]];
+  return[Math.random()*W,r[1]+r[3]+Math.random()*(H-r[1]-r[3])];
+}
+const fxOrbs=Array.from({length:7},()=>({side:Math.random()>0.5?0:1,x:Math.random()>0.5?.05:.93,y:.3+Math.random()*.4,r:35+Math.random()*30,hue:0,ph:Math.random()*Math.PI*2,sp:.35+Math.random()*.55,life:Math.random(),dur:2.5+Math.random()*2.5}));
+const fxRays=Array.from({length:6},()=>({x:Math.random(),y:Math.random(),len:4+Math.random()*6,hue:0,ph:Math.random()*Math.PI*2}));
+let fxBursts=[],fxT=0,fxNextBurst=1.4;
+function drawColorFx(rdt){
+  fxT+=rdt;
+  ctx.globalCompositeOperation='lighter';
+  for(const o of fxOrbs){
+    o.life=(o.life+rdt/o.dur)%1;
+    const fadeInFade=Math.sin(o.life*Math.PI);
+    o.x+=rdt*.022*Math.cos(fxT*.22+o.ph);
+    o.y+=rdt*.022*Math.sin(fxT*.19+o.ph*1.1);
+    if(o.x<-.15)o.x=1.15;if(o.x>1.15)o.x=-.15;
+    if(o.y<-.15)o.y=1.15;if(o.y>1.15)o.y=-.15;
+    const px=o.x*W,py=o.y*H;
+    const pulse=.35+.65*Math.sin(fxT*o.sp+o.ph*2);
+    const rr=o.r*(.55+.45*pulse);
+    const h=(240+Math.round(Math.sin(fxT)*8))%360;
+    const g=ctx.createRadialGradient(px,py,0,px,py,rr);
+    g.addColorStop(0,'rgba(255,255,255,.15)');
+    g.addColorStop(.5,'rgba(255,255,255,.08)');
+    g.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=g;
+    ctx.beginPath();ctx.arc(px,py,rr,0,7);ctx.fill();
+    const h2=0;
+    ctx.fillStyle='rgba(255,255,255,'+(.2*fadeInFade)+')';
+    ctx.beginPath();ctx.arc(px,py,rr*.1*(.7+.3*Math.sin(fxT*2.4+o.ph)),0,7);ctx.fill();
+  }
+  for(const r of fxRays){
+    const px=r.x*W+Math.sin(fxT*38+r.ph)*4;
+    const py=r.y*H+Math.cos(fxT*35+r.ph*1.3)*4;
+    const ang=fxT*.5+r.ph;
+    const len=r.len*(.55+.45*Math.sin(fxT*5+r.ph));
+    const h=240;
+    ctx.strokeStyle='rgba(255,255,255,.08)';
+    ctx.lineWidth=.6;
+    ctx.beginPath();
+    ctx.moveTo(px-Math.cos(ang)*len,py-Math.sin(ang)*len);
+    ctx.lineTo(px+Math.cos(ang)*len,py+Math.sin(ang)*len);
+    ctx.stroke();
+    ctx.strokeStyle='rgba(255,255,255,.06)';
+    ctx.lineWidth=.4;
+    ctx.beginPath();
+    ctx.moveTo(px-Math.cos(ang)*len*.35,py-Math.sin(ang)*len*.35);
+    ctx.lineTo(px+Math.cos(ang)*len*.35,py+Math.sin(ang)*len*.35);
+    ctx.stroke();
+  }
+  ctx.globalCompositeOperation='source-over';
 }
 function render(rdt){
   if(state==='menu'){drawMenuBg(rdt);return;}
@@ -3302,6 +3736,9 @@ function render(rdt){
     ctx.globalAlpha=1;
   }
 
+  for(const b of balls){
+    if(b.alive&&b.w==='gravity')drawGravityWell(b);
+  }
   for(const p of projectiles){
     const ps=p.size||5;
     if(p.kind==='reap'){
@@ -3459,6 +3896,19 @@ function render(rdt){
 
 const carried=new Set();
   for(const vb of balls)if(vb.w==='vlad'&&vb.vImpCarry)carried.add(vb.vImpCarry.id);
+  for(const b of balls){
+    if(!b.alive||!b.qsTrail||b.qsTrail.length<2)continue;
+    const tsp=b.qsActive?3:1;
+    ctx.lineCap='round';
+    for(let ti=1;ti<b.qsTrail.length;ti++){
+      const p0=b.qsTrail[ti-1],p1=b.qsTrail[ti];
+      const f=ti/b.qsTrail.length;
+      ctx.strokeStyle=`rgba(77,225,255,${(.4*f*f+.06)*tsp})`;
+      ctx.lineWidth=b.r*1.9*(1-f*.6);
+      ctx.beginPath();ctx.moveTo(p0.x,p0.y);ctx.lineTo(p1.x,p1.y);ctx.stroke();
+    }
+    ctx.lineCap='butt';
+  }
   for(const b of balls){
     if(!b.alive)continue;
     ctx.globalAlpha=(b.ghost&&(b.vanishState===1||(b.w==='throwStar'&&b.njHidden)))?0:1;
@@ -4034,6 +4484,10 @@ function burnFx(b){
 }
 function incText(b){
   switch(b.w){
+    case 'gravity':
+      if(b.gwLeft>GW.duration)return tt('ABSORBING ORBS ','ASSORBIMENTO SFERE ')+b.gwAbsorbed+'/'+b.gwPower;
+      if(b.gwLeft>0)return tt('COLLAPSE IN ','COLLASSO TRA ')+b.gwLeft.toFixed(1)+'s \u00b7 '+(GW.burst+b.gwPower*GW.chargeDamage)+' DMG';
+      return tt('ORBS ','SFERE ')+(GW.satellites+gravityOrbCharges(b))+' \u00b7 '+tt('WELL IN ','POZZO TRA ')+Math.max(0,b.gwCooldown).toFixed(1)+'s';
     case 'sword':return b.swingState>0?tt('WIDE SWING!','GRAN FENDENTE!'):(tt('SWING IN ','FENDENTE TRA ')+Math.max(0,b.swingT).toFixed(1)+'s \u00b7 '+tt('DMG ','DMG ')+fmtD(b.def.dmg+b.dmgBonus));
     case 'dagger':return b.vanishState===1?tt('GHOSTED \u00b7 SPIN \u00d7','FANTASMA \u00b7 ROTAZIONE \u00d7')+b.spdMul.toFixed(3):tt('GHOST IN ','FANTASMA TRA ')+Math.max(0,b.vanishT).toFixed(1)+'s \u00b7 '+tt('SPIN \u00d7','ROTAZIONE \u00d7')+b.spdMul.toFixed(3);
     case 'spear':return b.isClone?(tt('CLONE \u00d7','CLONE \u00d7')+b.lenMul.toFixed(2)+' \u00b7 '+(1+b.dmgBonus).toFixed(1)+' DMG'):(tt('LEN \u00d7','LUNG \u00d7')+b.lenMul.toFixed(2)+' \u00b7 '+(1+b.dmgBonus).toFixed(1)+' DMG \u00b7 '+tt('CLONE IN ','CLONE TRA ')+Math.max(0,b.cloneT).toFixed(1)+'s');
@@ -4085,6 +4539,7 @@ function incText(b){
       if(b.njHidden)return tt('HIDDEN! \u00b7 REAPPEARING...','NASCOSTO! \u00b7 RIAPPARENDO...')+' '+Math.max(0,b.njHideLeft).toFixed(1)+'s';
       return tt('STACKS \u00d7','STACK \u00d7')+b.njStacks+' \u00b7 '+tt('MAX BOUNCE \u00d7','RIMBALZO MAX \u00d7')+b.njMaxBounce+' \u00b7 '+tt('SKILL IN ','SKILL TRA ')+Math.max(0,b.njSkillT).toFixed(1)+'s';
     }
+    case 'quicksilver':return b.qsActive?tt('SUPERSPEED! \u00b7 ','SUPERVELOCIT\u00c0! \u00b7 ')+Math.max(0,b.qsLeft).toFixed(1)+'s':tt('SPEED \u00d7','VELOCIT\u00c0 \u00d7')+b.qsBoost.toFixed(1)+' \u00b7 '+tt('SUPERSPEED IN ','SUPERVELOCIT\u00c0 TRA ')+Math.max(0,b.qsSkillT).toFixed(1)+'s';
   }
 }
 function drawHUD(rdt){
@@ -4139,9 +4594,12 @@ ctx.strokeStyle='rgba(255,255,255,.25)';ctx.lineWidth=1;rr(bx,topY+32,bw,bh,7);c
     ctx.fillText(fmtD(Math.max(0,b.hp))+' / '+b.maxHp,bx+bw/2,topY+46);
     ctx.textAlign=left?'left':'right';
     ctx.font='700 12px Consolas,monospace';
-const st=b.w==='vlad'?0:b.w==='sword'?Math.round(b.dmgBonus/2):b.w==='shield'?(b.ingCount||0):b.stacks;
+const st=b.w==='gravity'?b.gwCharge:b.w==='vlad'?0:b.w==='sword'?Math.round(b.dmgBonus/2):b.w==='shield'?(b.ingCount||0):b.w==='quicksilver'?Math.round((b.qsBoost-1)*2):b.stacks;
     const rowY=topY+68;
-    if(b.w==='vlad'){
+    if(b.w==='gravity'){
+      ctx.fillStyle='#67e8f9';
+      ctx.fillText(tt('ORB CHARGES ','CARICHE SFERA ')+gravityOrbCharges(b)+'/'+gravityChargeLimit(b),tx,rowY);
+    }else if(b.w==='vlad'){
       const vct=Math.max(0,b.vImpState===0?b.vImpT:0);
       ctx.fillStyle='#ff6b6b';
       ctx.shadowColor='rgba(255,90,90,.5)';ctx.shadowBlur=6;
@@ -4161,6 +4619,7 @@ const st=b.w==='vlad'?0:b.w==='sword'?Math.round(b.dmgBonus/2):b.w==='shield'?(b
     if(b.giantUntil>simTime)chips.push('\uD83D\uDCAA');
     if(b.prepLeft>0)chips.push('\uD83C\uDF63');
     if(b.infectedUntil>simTime)chips.push('\uD83E\uDDA0');
+    if(b.qsActive)chips.push('\u26A1');
     chips.forEach((c,i)=>{
       const r=11,ccx=left?cx+cw-16-i*(r*2+4):cx+16+r+i*(r*2+4);
       ctx.fillStyle='rgba(255,255,255,.09)';
@@ -4172,8 +4631,8 @@ const st=b.w==='vlad'?0:b.w==='sword'?Math.round(b.dmgBonus/2):b.w==='shield'?(b
     });
     ctx.fillStyle='#9fc3ef';ctx.font='600 12px Consolas,monospace';
     ctx.fillText(incText(b),tx,rowY+17);
-    const sy=rowY+25,t=({sword:b.swingT,dagger:b.vanishT,spear:b.cloneT,hammer:b.giantT,scythe:b.reapT,shield:b.sushiT,shuriken:b.diceAbT,bow:b.chargeT,katana:b.dashT,staff:b.mageShiftT,zombie:b.hordeT,throwStar:b.njSkillT,vlad:b.vImpState===0?b.vImpT:10})[b.w]||0,
-      mx=({sword:5,dagger:5,spear:10,hammer:15,scythe:9,shield:6,shuriken:8,bow:15,katana:5,staff:12,zombie:b.hordeMax||40,throwStar:10,vlad:10})[b.w]||10,
+    const sy=rowY+25,t=({sword:b.swingT,dagger:b.vanishT,spear:b.cloneT,hammer:b.giantT,scythe:b.reapT,shield:b.sushiT,shuriken:b.diceAbT,bow:b.chargeT,katana:b.dashT,staff:b.mageShiftT,zombie:b.hordeT,throwStar:b.njSkillT,vlad:b.vImpState===0?b.vImpT:10,quicksilver:b.qsActive?0:b.qsSkillT,gravity:b.gwLeft>0?0:b.gwCooldown})[b.w]||0,
+      mx=({sword:5,dagger:5,spear:10,hammer:15,scythe:9,shield:6,shuriken:8,bow:15,katana:5,staff:12,zombie:b.hordeMax||40,throwStar:10,vlad:10,quicksilver:20,gravity:b.gwCooldownMax})[b.w]||10,
       pr=t<=0?1:Math.max(0,1-t/mx);
     ctx.fillStyle='rgba(255,255,255,.07)';rr(bx,sy,bw,5,2.5);ctx.fill();
     if(pr>0){
@@ -4308,6 +4767,7 @@ function finishKillcam(){
 }
 
 const SHORT={
+  gravity:'More orbs mean faster rotation. Singularity starts at full pull strength, absorbs extra orbs to grow larger, and raises the charge cap each cast.',
   sword:'Steady all-rounder. Grows stronger with every arc hit.',
   dagger:'Blazing fast spin, vanishes to backstab for massive damage.',
   spear:'Longest reach. Summons clones and scales forever.',
@@ -4320,9 +4780,11 @@ const SHORT={
   staff:'Elemental mage. Orbs, status effects and bursts.',
   zombie:'Hungry stalker. Bites hard, infects, and calls a horde of little friends.',
   throwStar:'Wall-bouncing shuriken that ricochet and grow more bounces with every hit.',
-  vlad:'A spear that makes targets bleed; the throw pierces through them and pins them to the wall.'
+  vlad:'A spear that makes targets bleed; the throw pierces through them and pins them to the wall.',
+  quicksilver:'No weapon - just his body. Hits by touch, touch damage scales with speed, gets faster with every hit and hit taken, never slows down, and outruns time itself.'
 };
 const SHORT_IT={
+  gravity:'Pi\u00f9 sfere, rotazione pi\u00f9 veloce. La Singolarit\u00e0 attira subito a piena forza, assorbe le sfere extra per crescere e aumenta il limite di cariche.',
   sword:'Tuttofare affidabile. Diventa pi\u00f9 forte ad ogni fendente.',
   dagger:'Rotazione fulminea, svanisce e colpisce alle spalle con danni enormi.',
   spear:'Portata maggiore. Evoca cloni e cresce all\u2019infinito.',
@@ -4335,10 +4797,12 @@ const SHORT_IT={
   staff:'Mago elementale. Sfere, effetti di stato ed esplosioni.',
   zombie:'Stalker affamato. I morsi colpiscono forte, lo curano, infettano e chiamano un\u2019orda di piccoli amici.',
   throwStar:'Shuriken che rimbalzano sui muri e ottengono pi\u00f9 rimbalzi ad ogni colpo.',
-  vlad:'Lancia che fa sanguinare il bersaglio; il lancio lo trafigge e lo inchioda al muro.'
+  vlad:'Lancia che fa sanguinare il bersaglio; il lancio lo trafigge e lo inchioda al muro.',
+  quicksilver:'Nessun\u2019arma - solo il corpo. Colpisce al contatto, il danno scala con la velocit\u00e0, diventa pi\u00f9 veloce ad ogni colpo e ad ogni danno subito, non rallenta mai e supera il tempo stesso.'
 };
 const shortL=()=>lang==='it'?SHORT_IT:SHORT;
 const STATS={
+  gravity:[['DAMAGE',.6],['SPEED',.38],['RANGE',.5],['CONTROL',.95],['GROWTH',.5],['ABILITY',.9]],
   sword:[['DAMAGE',.68],['SPEED',.55],['RANGE',.58],['KNOCKBACK',.5],['GROWTH',.82],['ABILITY',.7]],
   dagger:[['DAMAGE',.32],['SPEED',1],['RANGE',.28],['STEALTH',1],['GROWTH',.5],['ABILITY',.95]],
   spear:[['DAMAGE',.45],['SPEED',.45],['RANGE',1],['KNOCKBACK',.45],['GROWTH',.92],['ABILITY',.78]],
@@ -4351,9 +4815,13 @@ const STATS={
   staff:[['DAMAGE',.4],['SPEED',.34],['RANGE',.82],['CONTROL',1],['GROWTH',.9],['ABILITY',.95]],
   zombie:[['DAMAGE',.62],['SPEED',.3],['RANGE',.22],['CONTROL',.88],['GROWTH',.35],['ABILITY',1]],
   throwStar:[['DAMAGE',.5],['SPEED',.7],['RANGE',.65],['BOUNCE',1],['GROWTH',.8],['ABILITY',.9]],
-  vlad:[['DAMAGE',.68],['SPEED',.45],['RANGE',1],['KNOCKBACK',.5],['BLEED',.9],['ABILITY',.95]]
+  vlad:[['DAMAGE',.68],['SPEED',.45],['RANGE',1],['KNOCKBACK',.5],['BLEED',.9],['ABILITY',.95]],
+  quicksilver:[['DAMAGE',.35],['SPEED',1],['RANGE',.06],['MOBILITY',1],['GROWTH',.8],['ABILITY',.95]]
 };
 const DETAILS={
+  gravity:{dmg:'<b>1.5</b> damage per orb hit',
+    pas:['Starts with <b>3 orbs</b> that strike on contact and cannot clash with weapons. Each extra orb adds <b>20% of base rotation speed</b>.','The orbit expands from <b>1.55x to 5.2x</b> the ball radius over <b>3s</b>, holds at maximum distance for <b>1s</b>, then contracts over <b>3s</b>.','Each damaging orb hit adds <b>1 Orb charge and 1 extra orb</b>, capped at the current charge capacity. Starts at <b>6 charges</b>: <b>6 extra + 3 base = 9 orbs</b>. Each Singularity cast raises capacity by <b>+1</b> for this battle.'],
+    act:['<span class="sk">SINGULARITY</span> \u2014 every <b>10\u201314s</b>, opens a black hole at the nearest vulnerable enemy with its <b>full charge-based pull immediately</b>: <b>+15% of base pull per consumed Orb charge</b>, before the orb-flight animation. Charges reset, leaving <b>3 orbiting orbs</b>; extras fly into the black hole, growing its radius by <b>8% of base per orb</b>. After absorption it pulls for <b>2.5s</b>, then bursts for <b>8 damage + 2 per consumed charge</b>. Escape the marked area before the burst. New charges and extra orbs earned during the well power the next cast.']},
   sword:{dmg:'<b>2</b> damage per hit',
     pas:['Successful <span class="sk">Wide Slash</span> hits increase base damage by <b>+2</b>.','A wide swing can strike multiple times in one sweep.'],
     act:['<span class="sk">WIDE SLASH</span> \u2014 every <b>2\u20135s</b>, performs a wide slash at the target dealing <b>base damage \u00d72</b>.']},
@@ -4388,16 +4856,22 @@ const DETAILS={
     status:['<span class="st">BURNING</span> \u2014 deals <b>1.5</b> damage each second for <b>6 seconds</b>.','<span class="st">FROZEN</span> \u2014 freezes the enemy in place for <b>3 seconds</b>.','<span class="st">SHOCKED</span> \u2014 applies an electric charge; the next damage taken is <b>tripled</b>.']},
   zombie:{dmg:'<b>5</b> damage per bite',
     pas:['When a target enters his <span class="sk">bite circle</span>, he instantly bites them, then retreats and waits <b>2s</b> before biting again.','Each successful bite reduces Zombie Horde cooldown by <b>1s</b>.','Heals <b>5 HP</b> for every successful bite.','<b>20%</b> chance per bite to afflict <span class="st">INFECTED</span>.','Cannot be damaged while latched on, and gains <b>1 second</b> of invulnerability after every bite.'],
-    act:['<span class="sk">MINI ZOMBIE HORDE</span> \u2014 every <b>20\u201330s</b>, calls <b>10</b> mini zombies (<b>8 HP</b>) from outside the arena \u2014 <b>+1</b> zombie for every bite he lands. Each one instantly bites the enemy for <b>2</b> damage each second for <b>3 seconds</b>, then dies. Max <b>5</b> latched at once; latched zombies cannot be damaged.'],
+    act:['<span class="sk">MINI ZOMBIE HORDE</span> \u2014 every <b>20\u201330s</b>, calls <b>10</b> mini zombies (<b>1 HP</b> each) from outside the arena \u2014 <b>+2</b> mini zombies for every bite he lands. Each one instantly bites the enemy for <b>2</b> damage each second for <b>3 seconds</b>, then dies. Max <b>5</b> latched at once; latched zombies cannot be damaged.'],
     status:['<span class="st">INFECTED</span> \u2014 the target\u2019s movement and rotation speed are halved for <b>5 seconds</b>.']},
   throwStar:{dmg:'<b>1</b> damage per shuriken',
-    pas:['Each shuriken bounces off walls up to <b>1</b> time (default).','Each successful hit increases max bounces by <b>+1</b>.'],
+    pas:['Each shuriken bounces off walls up to <b>1</b> time (default).','Each successful hit increases max bounces by <b>+1</b>.','Every wall bounce adds <b>+0.2</b> dmg to that shuriken.'],
     act:['<span class="sk">SHURIKEN NO JUTSU</span> \u2014 every <b>5\u201310s</b>, fires <b>10</b> shuriken in a radial burst, then vanishes for <b>3 seconds</b> and reappears randomly. Each activation increases max bounces by <b>+1</b>.']},
   vlad:{dmg:'<b>2</b> damage per hit',
     pas:['Each successful hit applies <b>1\u201320%</b> bleed buildup on the target.','Bleed buildup decays by <b>1%</b> per second; at <b>100%</b> the target immediately takes <b>20</b> damage and the buildup resets to <b>0%</b>.'],
-    act:['<span class="sk">IMPALE</span> \u2014 every <b>5\u201310s</b>, stops, locks on and charges his spear for <b>1 second</b>, then hurls it. The spear pierces straight through the enemy and slams its tip into the wall, pinning them there for <b>2</b> damage: the target can\u2019t move or act, takes <b>1</b> damage every <b>0.5s</b>, gains <b>1%</b> bleed buildup per second, and stays pinned until Vlad walks over and pulls the spear out of the wall.']}
+    act:['<span class="sk">IMPALE</span> \u2014 every <b>5\u201310s</b>, stops, locks on and charges his spear for <b>1 second</b>, then hurls it. The spear pierces straight through the enemy and slams its tip into the wall, pinning them there for <b>2</b> damage: the target can\u2019t move or act, takes <b>1</b> damage every <b>0.5s</b>, gains <b>1%</b> bleed buildup per second, and stays pinned until Vlad walks over and pulls the spear out of the wall.']},
+  quicksilver:{dmg:'<b>50% of current speed</b>',
+    pas:['Every successful hit or every hit he takes, Quicksilver gains <b>0.50 speed</b>.','He is <b>immune to slows</b>.','He <b>plows through enemies</b> without slowing down, shoving them away.'],
+    act:['<span class="sk">SUPERSPEED</span> \u2014 every <b>12\u201320s</b>, for <b>3 seconds</b> he moves at <b>double his current speed</b> while time slows down and he phases straight through enemies.']}
 };
 const DETAILS_IT={
+  gravity:{dmg:'<b>1.5</b> danni per colpo di sfera',
+    pas:['Inizia con <b>3 sfere</b> che colpiscono al contatto e non si scontrano con le armi. Ogni sfera extra aggiunge <b>20% della velocit\u00e0 di rotazione base</b>.','La loro orbita si espande da <b>1.55x a 5.2x</b> il raggio del personaggio in <b>3s</b>, resta alla distanza massima per <b>1s</b> e ritorna in <b>3s</b>.','Ogni colpo di sfera che infligge danni aggiunge <b>1 carica sfera e 1 sfera extra</b>, fino al limite attuale. Inizia con <b>6 cariche</b>: <b>6 sfere extra + 3 di base = 9 totali</b>. Ogni Singolarit\u00e0 aumenta il limite di <b>+1</b> per questa battaglia.'],
+    act:['<span class="sk">SINGOLARIT\u00c0</span> \u2014 ogni <b>10\u201314s</b>, apre un buco nero sul nemico vulnerabile pi\u00f9 vicino con <b>tutta la forza di attrazione immediatamente</b>: <b>+15% della forza base per carica consumata</b>, prima del volo delle sfere. Azzera le cariche e lascia <b>3 sfere orbitanti</b>; le sfere extra volano nel buco nero e aumentano il raggio del <b>8% del valore base per sfera</b>. Dopo averle assorbite, attira per <b>2.5s</b>, poi esplode infliggendo <b>8 danni + 2 per carica consumata</b>. Esci dalla zona indicata prima del collasso. Le nuove cariche e sfere ottenute durante il pozzo potenziano il prossimo utilizzo.']},
   sword:{dmg:'<b>2</b> danni per colpo',
     pas:['I colpi riusciti di <span class="sk">Wide Slash</span> aumentano il danno base di <b>+2</b>.','Un fendente ampio pu\u00f2 colpire pi\u00f9 volte in un\u2019unica scossa.'],
     act:['<span class="sk">WIDE SLASH</span> \u2014 ogni <b>2\u20135s</b>, esegue un fendente ampio verso il bersaglio infliggendo <b>danno base \u00d72</b>.']},
@@ -4418,7 +4892,7 @@ const DETAILS_IT={
     act:['<span class="sk">SUSHI BOMB PREPARATION</span> \u2014 dopo aver raccolto tutti e <b>4</b> gli ingredienti, prepara per <b>5 secondi</b>, poi fa apparire bombe sushi in tutta l\u2019arena. Ogni bomba infligge <b>3</b> danni, <b>500%</b> di spinta e brucia il bersaglio. Sushiman recupera <span class="he">+3 HP</span> mangiando le proprie bombe. Ogni preparazione genera pi\u00f9 bombe.'],
     status:['<span class="st">BRUCIATURA</span> \u2014 infligge <b>1.5</b> danni al secondo per <b>3 secondi</b>.']},
   shuriken:{dmg:'Tiro di dado (<b>1\u20136</b>)',
-    pas:['Tiri identici consecutivi moltiplicano il danno base (<b>2</b> di fila = \u00d7<b>2</b>, <b>3</b> = \u00d7<b>3</b>\u2026).'],
+    pas:['Tiri identici consecutivi moltiplicano il danno base (<b>2</b> di fila = \u00d7<b>2</b>, <b>3</b> = \u00d7<b>3</b>\u2026).','Ogni rimbalzo sul muro aggiunge <b>+0.2</b> danno a quello shuriken.'],
     act:['<span class="sk">DOUBLE ROLL</span> \u2014 ogni <b>4\u20138s</b>, tira due dadi e lancia un dado grande che infligge danni pari al totale. Con <b>7</b> o <b>11</b> lancia il dado fortunato che infligge il <b>40%</b> dei HP massimi del bersaglio; con <b>2</b>, <b>3</b> o <b>12</b> subisce invece il <b>40%</b> dei propri HP massimi.']},
   bow:{dmg:'<b>1</b> danni per freccia',
     pas:['La raffica scocca <b>1 + cariche di frecce</b> frecce.','Ogni colpo riuscito aggiunge <b>+1</b> freccia.'],
@@ -4432,14 +4906,17 @@ const DETAILS_IT={
     status:['<span class="st">BRUCIATURA</span> \u2014 infligge <b>1.5</b> danni al secondo per <b>6 secondi</b>.','<span class="st">CONGELATO</span> \u2014 immobilizza il nemico per <b>3 secondi</b>.','<span class="st">ELETRIFICATO</span> \u2014 applica una carica elettrica; il prossimo danno subito viene <b>triplicato</b>.']},
   zombie:{dmg:'<b>5</b> danni per morso',
     pas:['Quando un bersaglio entra nel suo <span class="sk">cerchio di morso</span>, lo morde immediatamente, poi indietreggia e attende <b>2s</b> prima di mordere di nuovo.','Ogni morso riuscito riduce il tempo di ricarica dell\u2019Orda di Zombie di <b>1s</b>.','Si cura di <b>5 HP</b> per ogni morso riuscito.','<b>20%</b> di probabilit\u00e0 per morso di infliggere <span class="st">INFETTO</span>.','Non subisce danni mentre \u00e8 aggrappato, e ottiene <b>1 secondo</b> di invulnerabilit\u00e0 dopo ogni morso.'],
-    act:['<span class="sk">ORDA DI ZOMBIE MINI</span> \u2014 ogni <b>20\u201330s</b>, chiama <b>10</b> mini zombie (<b>8 HP</b>) da fuori dell\u2019arena \u2014 <b>+1</b> zombie per ogni morso riuscito. Ognuno morde immediatamente il nemico per <b>2</b> danni al secondo per <b>3 secondi</b>, poi muore. Massimo <b>5</b> aggrappati alla volta; quelli aggrappati non subiscono danni.'],
+    act:['<span class="sk">ORDA DI ZOMBIE MINI</span> \u2014 ogni <b>20\u201330s</b>, chiama <b>10</b> mini zombie (<b>1 HP</b> ciascuno) da fuori dell\u2019arena \u2014 <b>+2</b> mini zombie per ogni morso riuscito. Ognuno morde immediatamente il nemico per <b>2</b> danni al secondo per <b>3 secondi</b>, poi muore. Massimo <b>5</b> aggrappati alla volta; quelli aggrappati non subiscono danni.'],
     status:['<span class="st">INFETTO</span> \u2014 movimento e velocit\u00e0 di rotazione del bersaglio dimezzati per <b>5 secondi</b>.']},
   throwStar:{dmg:'<b>1</b> danno per shuriken',
-    pas:['Ogni shuriken rimbalza sui muri fino a <b>1</b> volta (predefinito).','Ogni colpo riuscito aumenta i rimbalzi massimi di <b>+1</b>.'],
+    pas:['Ogni shuriken rimbalza sui muri fino a <b>1</b> volta (predefinito).','Ogni colpo riuscito aumenta i rimbalzi massimi di <b>+1</b>.','Ogni rimbalzo sul muro aggiunge <b>+0.2</b> danno a quello shuriken.'],
     act:['<span class="sk">SHURIKEN NO JUTSU</span> \u2014 ogni <b>5\u201310s</b>, lancia <b>10</b> shuriken in raffica radiale, poi svanisce per <b>3 secondi</b> e riappare casualmente. Ogni attivazione aumenta i rimbalzi massimi di <b>+1</b>.']},
   vlad:{dmg:'<b>2</b> danni per colpo',
     pas:['Ogni colpo riuscito applica <b>1\u201320%</b> di accumulo di sanguinamento sul bersaglio.','L\u2019accumulo di sanguinamento cala del <b>1%</b> al secondo; al <b>100%</b> il bersaglio subisce immediatamente <b>20</b> danni e l\u2019accumulo torna a <b>0%</b>.'],
-    act:['<span class="sk">IMPALA</span> \u2014 ogni <b>5\u201310s</b>, si ferma, blocca il bersaglio e carica la lancia per <b>1 secondo</b>, poi la scaglia. La lancia trafigge il bersaglio e infila la punta nel muro, incastrandolo per <b>2</b> danni: il bersaglio non pu\u00f2 muoversi n\u00e9 agire, subisce <b>1</b> danno ogni <b>0.5s</b>, accumula <b>1%</b> di sanguinamento al secondo e resta inchiodato finch\u00e9 Vlad non raggiunge la lancia e la tira fuori dal muro.']}
+    act:['<span class="sk">IMPALA</span> \u2014 ogni <b>5\u201310s</b>, si ferma, blocca il bersaglio e carica la lancia per <b>1 secondo</b>, poi la scaglia. La lancia trafigge il bersaglio e infila la punta nel muro, incastrandolo per <b>2</b> danni: il bersaglio non pu\u00f2 muoversi n\u00e9 agire, subisce <b>1</b> danno ogni <b>0.5s</b>, accumula <b>1%</b> di sanguinamento al secondo e resta inchiodato finch\u00e9 Vlad non raggiunge la lancia e la tira fuori dal muro.']},
+  quicksilver:{dmg:'<b>50% della velocit\u00e0 attuale</b>',
+    pas:['Per ogni colpo riuscito o subito, Quicksilver guadagna <b>0.50 velocit\u00e0</b>.','\u00c8 <b>immune ai rallentamenti</b>.','<b>Travolge</b> i nemici senza rallentare, spingendoli via.'],
+    act:['<span class="sk">SUPERVELOCIT\u00c0</span> \u2014 ogni <b>12\u201320s</b>, per <b>3 secondi</b> si muove al <b>doppio della sua velocit\u00e0 attuale</b> mentre il tempo rallenta e passa attraverso i nemici.']}
 };
 const detailsL=()=>lang==='it'?DETAILS_IT:DETAILS;
 function drawPreview(p,idx){
@@ -4484,15 +4961,22 @@ function buildGrid(){
   const g=document.getElementById('tkGrid');
   const cells=KEYS.map((k,i)=>({k,i})).concat([{random:true}]);
   g.innerHTML=cells.map(c=>c.random
-    ?'<div class="tkCell random" data-r="1" title="Random"><canvas width="44" height="44"></canvas><span class="tag">?</span></div>'
+    ?'<div class="tkCell random" data-r="1" title="Random"><canvas width="44" height="44"></canvas><span class="tag">RANDOM</span></div>'
     :`<div class="tkCell" data-i="${c.i}"><canvas width="44" height="44"></canvas><span class="tag">${WEAPONS[c.k].name.toUpperCase()}</span></div>`).join('');
   g.querySelectorAll('.tkCell').forEach(cell=>{
     const pc=cell.querySelector('canvas').getContext('2d');
     const old=ctx;ctx=pc;
     ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,44,44);
-    if(cell.dataset.r){
-      ctx.font='700 30px Arial';ctx.textAlign='center';ctx.textBaseline='middle';
-      ctx.fillStyle='#7d5dff';ctx.fillText('\u2753',22,23);
+if(cell.dataset.r){
+      ctx.translate(22,23);
+      ctx.shadowColor='#fff';ctx.shadowBlur=8;
+      ctx.fillStyle='#e9eef7';ctx.beginPath();ctx.arc(0,0,12,0,7);ctx.fill();
+      ctx.shadowBlur=0;
+      const gg=ctx.createRadialGradient(-4,-5,2,0,0,12);
+      gg.addColorStop(0,'rgba(255,255,255,.45)');gg.addColorStop(1,'rgba(0,0,0,.3)');
+      ctx.fillStyle=gg;ctx.beginPath();ctx.arc(0,0,12,0,7);ctx.fill();
+      ctx.font='900 16px Arial';ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillStyle='#1a1a25';ctx.fillText('\u003F',0,1);
     }else{
       const i=+cell.dataset.i,key=KEYS[i];
       ctx.translate(22,23);
@@ -4648,7 +5132,7 @@ document.querySelectorAll('.fbtn').forEach(btn=>{
       return;
     }
     const key=KEYS[si],d=WEAPONS[key],dt=detailsL()[key];
-    document.getElementById('fname').textContent=d.name.toUpperCase();
+    document.getElementById('fname').textContent=d.name.toUpperCase()+(key==='shuriken'?' (DICE)':'');
     document.getElementById('frole').textContent=(p===0?'Player 1':'Player 2')+' \u00b7 '+(d.mul<1.5?tt('light','leggero'):d.mul>2.2?tt('colossal','colossale'):tt('standard','standard'))+' '+tt('frame','telaio');
     fx.shadowBlur=0;
     document.getElementById('fst').innerHTML=STATS[key].map(([l,v])=>
@@ -4881,5 +5365,4 @@ requestAnimationFrame(frame);
 </script>
 </body>
 </html>
-
 
